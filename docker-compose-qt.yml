@@ -1,0 +1,213 @@
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: weather_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - weather_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - weather_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # API Gateway Service (C++/Qt)
+  api-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.qt
+    ports:
+      - "8000:8000"
+    environment:
+      - QT_QPA_PLATFORM=offscreen
+      - PIRATE_WEATHER_API_KEY=${PIRATE_WEATHER_API_KEY}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-default-secret-key}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      weather-data:
+        condition: service_started
+      ml-service:
+        condition: service_started
+      location-service:
+        condition: service_started
+      alert-service:
+        condition: service_started
+      data-processing:
+        condition: service_started
+      database-service:
+        condition: service_started
+    networks:
+      - weather_network
+    command: ["./bin/ApiGatewayService"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Weather Data Collection Service (C++/Qt)
+  weather-data:
+    build:
+      context: .
+      dockerfile: Dockerfile.qt
+    ports:
+      - "8001:8001"
+    environment:
+      - QT_QPA_PLATFORM=offscreen
+      - PIRATE_WEATHER_API_KEY=${PIRATE_WEATHER_API_KEY}
+    networks:
+      - weather_network
+    command: ["./bin/WeatherDataService"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Machine Learning Service (C++/Qt)
+  ml-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.qt
+    ports:
+      - "8002:8002"
+    environment:
+      - QT_QPA_PLATFORM=offscreen
+      - MODEL_PATH=/app/models/weather_lstm_model.h5
+      - SCALER_PATH=/app/models/scaler.pkl
+    volumes:
+      - ml_models:/app/models
+    networks:
+      - weather_network
+    command: ["./bin/MLService"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Location Service (C++/Qt)
+  location-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.qt
+    ports:
+      - "8003:8003"
+    environment:
+      - QT_QPA_PLATFORM=offscreen
+    volumes:
+      - location_data:/app/data
+    networks:
+      - weather_network
+    command: ["./bin/LocationService"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Alert Service (C++/Qt)
+  alert-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.qt
+    ports:
+      - "8004:8004"
+    environment:
+      - QT_QPA_PLATFORM=offscreen
+      - SMTP_SERVER=${SMTP_SERVER:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - EMAIL_USERNAME=${EMAIL_USERNAME}
+      - EMAIL_PASSWORD=${EMAIL_PASSWORD}
+    volumes:
+      - alert_data:/app/data
+    networks:
+      - weather_network
+    command: ["./bin/AlertService"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Data Processing Service (C++/Qt)
+  data-processing:
+    build:
+      context: .
+      dockerfile: Dockerfile.qt
+    ports:
+      - "8005:8005"
+    environment:
+      - QT_QPA_PLATFORM=offscreen
+    networks:
+      - weather_network
+    command: ["./bin/DataProcessingService"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Database Service (C++/Qt)
+  database-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.qt
+    ports:
+      - "8006:8006"
+    environment:
+      - QT_QPA_PLATFORM=offscreen
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/weather_db
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - weather_network
+    command: ["./bin/DatabaseService"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8006/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+  redis_data:
+  ml_models:
+  location_data:
+  alert_data:
+
+networks:
+  weather_network:
+    driver: bridge
