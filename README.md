@@ -82,6 +82,34 @@ cd build/frontend && ./HyperlocalWeatherApp
 ./test-api-qt.sh
 ```
 
+### Alternative: Standard CMake Build
+
+You can also use standard CMake commands directly (useful for IDE integration):
+
+```bash
+# Clone the repository
+git clone https://github.com/aptitudepi/CSCE-120-Group-Project.git
+cd CSCE-120-Group-Project
+
+# Create build directory
+mkdir build && cd build
+
+# Configure with CMake
+cmake .. -DCMAKE_BUILD_TYPE=Release
+
+# Build
+cmake --build . -j$(nproc)
+
+# Run services
+./ApiGatewayService &
+./WeatherDataService &
+./MLService &
+# ... etc
+
+# Run frontend
+./HyperlocalWeatherApp
+```
+
 ## 📚 Documentation
 
 - **[SETUP.md](SETUP.md)** - Detailed setup and installation guide
