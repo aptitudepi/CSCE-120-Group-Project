@@ -9,9 +9,12 @@ echo "============================================================"
 # Check if Qt6 is installed
 if ! command -v qmake6 &> /dev/null && ! command -v qmake &> /dev/null; then
     echo "❌ Qt6 not found. Please install Qt6 development packages:"
-    echo "   Ubuntu/Debian: sudo apt install qt6-base-dev qt6-declarative-dev"
+    echo "   Ubuntu/Debian: sudo apt install qt6-base-dev qt6-declarative-dev qt6-httpserver-dev"
     echo "   macOS: brew install qt@6"
     echo "   Windows: Download from https://www.qt.io/download"
+    echo ""
+    echo "📝 Note: The project structure is now ready for building once Qt6 is installed."
+    echo "   All source files (.cpp, .h) and frontend files are in place."
     exit 1
 fi
 
@@ -41,18 +44,42 @@ mkdir -p services/database-service
 mkdir -p frontend
 mkdir -p config
 
-# Copy source files to appropriate directories
+# Copy service source files
 echo "📝 Organizing source files..."
 
-# Copy service source files (user would need to extract from the .txt files)
-echo "⚠️  Please extract the C++ source files from the generated .txt files:"
-echo "   - ApiGatewayService_cpp.txt -> services/api-gateway/"
-echo "   - WeatherDataService_cpp.txt -> services/weather-data/"
-echo "   - MLService_cpp.txt -> services/ml-service/"
-echo "   - DataProcessingService_cpp.txt -> services/data-processing/"
-echo "   - LocationService_cpp.txt -> services/location-service/"
-echo "   - AlertService_cpp.txt -> services/alert-service/"
-echo "   - DatabaseService_cpp.txt -> services/database-service/"
+# Copy API Gateway service
+cp ../ApiGatewayService.h ../ApiGatewayService.cpp ./services/api-gateway/
+cp ../ApiGatewayService_main.cpp ./services/api-gateway/main.cpp
+
+# Copy Weather Data service
+cp ../WeatherDataService.h ../WeatherDataService.cpp ./services/weather-data/
+cp ../WeatherDataService_main.cpp ./services/weather-data/main.cpp
+
+# Copy ML service
+cp ../MLService.h ../MLService.cpp ./services/ml-service/
+cp ../MLService_main.cpp ./services/ml-service/main.cpp
+
+# Copy Data Processing service
+cp ../DataProcessingService.h ../DataProcessingService.cpp ./services/data-processing/
+cp ../DataProcessingService_main.cpp ./services/data-processing/main.cpp
+
+# Copy Location service
+cp ../LocationService.h ../LocationService.cpp ./services/location-service/
+cp ../LocationService_main.cpp ./services/location-service/main.cpp
+
+# Copy Alert service
+cp ../AlertService.h ../AlertService.cpp ./services/alert-service/
+cp ../AlertService_main.cpp ./services/alert-service/main.cpp
+
+# Copy Database service
+cp ../DatabaseService.h ../DatabaseService.cpp ./services/database-service/
+cp ../DatabaseService_main.cpp ./services/database-service/main.cpp
+
+# Copy frontend files
+cp ../main.cpp ./frontend/
+cp ../weatherclient.h ./frontend/
+cp ../weatherclient.cpp ./frontend/
+cp ../main.qml ./frontend/
 
 # Copy CMakeLists files
 echo "📝 Setting up CMake files..."
@@ -66,11 +93,11 @@ cp ../CMakeLists_alert_service.txt ./services/alert-service/CMakeLists.txt
 cp ../CMakeLists_database_service.txt ./services/database-service/CMakeLists.txt
 cp ../CMakeLists_frontend.txt ./frontend/CMakeLists.txt
 
-# Copy frontend files
-cp ../main.cpp ./frontend/
-cp ../weatherclient.h ./frontend/
-cp ../weatherclient.cpp ./frontend/
-cp ../main.qml ./frontend/
+# Copy configuration
+cp ../settings.conf ./config/
+
+echo "✅ Files organized successfully!"
+echo ""
 
 # Configure with CMake
 echo "⚙️  Configuring with CMake..."

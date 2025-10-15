@@ -1,0 +1,63 @@
+# Build directories
+build/
+bin/
+lib/
+cmake-build-*/
+
+# Qt/C++ build artifacts
+*.o
+*.so
+*.a
+*.dylib
+*.dll
+*.exe
+*.app
+*.user
+*.autosave
+moc_*.cpp
+qrc_*.cpp
+ui_*.h
+*.moc
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists*.txt
+
+# Qt Creator
+*.pro.user
+*.pro.user.*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.bak
+*.orig
+
+# Compiled Python (if used for testing)
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Docker volumes
+postgres_data/
+redis_data/
+
+# Configuration with secrets (keep template)
+settings_local.conf
