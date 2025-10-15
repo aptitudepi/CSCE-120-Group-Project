@@ -89,6 +89,8 @@ chmod +x *.sh
 
 ### 3. Build the Project
 
+#### Option A: Using the Build Script (Recommended)
+
 ```bash
 ./build.sh
 ```
@@ -99,6 +101,24 @@ This script will:
 - Copy all source files to appropriate locations
 - Run CMake configuration
 - Compile all services and the frontend application
+
+#### Option B: Standard CMake Build
+
+For IDE integration or standard CMake workflows:
+
+```bash
+# Create build directory
+mkdir build && cd build
+
+# Configure
+cmake .. -DCMAKE_BUILD_TYPE=Release
+
+# Build
+cmake --build . -j$(nproc)
+
+# Executables will be in the build directory
+ls -la *Service HyperlocalWeatherApp
+```
 
 ### 4. Start Infrastructure Services
 
