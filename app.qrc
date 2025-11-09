@@ -1,0 +1,11 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource prefix="/">
+        <file alias="qml/main.qml">src/qml/main.qml</file>
+        <file alias="qml/pages/MainPage.qml">src/qml/pages/MainPage.qml</file>
+        <file alias="qml/components/ForecastCard.qml">src/qml/components/ForecastCard.qml</file>
+        <file alias="qml/components/LocationInput.qml">src/qml/components/LocationInput.qml</file>
+        <file alias="qml/components/AlertItem.qml">src/qml/components/AlertItem.qml</file>
+    </qresource>
+</RCC>
+

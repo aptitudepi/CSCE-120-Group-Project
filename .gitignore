@@ -1,35 +1,41 @@
 # Build directories
 build/
-bin/
-lib/
+build-*/
 cmake-build-*/
-
-# Qt/C++ build artifacts
-*.o
-*.so
-*.a
-*.dylib
-*.dll
-*.exe
-*.app
-*.user
-*.autosave
-moc_*.cpp
-qrc_*.cpp
-ui_*.h
-*.moc
+*.build/
 
 # CMake
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
-Makefile
-*.cmake
-!CMakeLists*.txt
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
 
-# Qt Creator
+# Qt
 *.pro.user
 *.pro.user.*
+*.qmlc
+*.jsc
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+*.autosave
+
+# Compiled binaries
+HyperlocalWeather
+HyperlocalWeather.exe
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+
+# Object files
+*.o
+*.obj
 
 # IDE
 .vscode/
@@ -37,10 +43,24 @@ Makefile
 *.swp
 *.swo
 *~
-
-# OS
 .DS_Store
-Thumbs.db
+
+# Database
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Coverage
+coverage/
+*.gcda
+*.gcno
+*.gcov
+coverage.info
+
+# Test results
+test_results/
+*.xml
 
 # Logs
 *.log
@@ -48,16 +68,12 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.bak
-*.orig
+*.cache
 
-# Compiled Python (if used for testing)
-__pycache__/
-*.py[cod]
-*$py.class
+# Environment
+.env
+.env.local
 
-# Docker volumes
-postgres_data/
-redis_data/
-
-# Configuration with secrets (keep template)
-settings_local.conf
+# API keys (if stored in files)
+*_api_key.txt
+*_secret.txt
