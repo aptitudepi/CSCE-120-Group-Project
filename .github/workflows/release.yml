@@ -11,6 +11,9 @@ on:
         required: true
         type: string
 
+permissions:
+  contents: write  # Needed for creating releases and pushing to gh-pages
+
 jobs:
   test:
     name: Run Tests Before Release
