@@ -20,7 +20,11 @@ WeatherController::WeatherController(QObject *parent)
     , m_loading(false)
     , m_lastLat(0.0)
     , m_lastLon(0.0)
+    , m_serviceProvider(NWS)
 {
+    // Set Pirate Weather API key
+    m_pirateService->setApiKey("WsdojoTv0GEHU60N9mwRXuXoXc9tOama");
+    
     // Connect NWS service
     connect(m_nwsService, &NWSService::forecastReady,
             this, &WeatherController::onForecastReady);
@@ -40,8 +44,28 @@ WeatherController::~WeatherController() {
     // Models and services deleted by Qt parent-child relationship
 }
 
+QString WeatherController::serviceProvider() const {
+    switch (m_serviceProvider) {
+        case NWS:
+            return "NWS";
+        case PirateWeather:
+            return "PirateWeather";
+        default:
+            return "NWS";
+    }
+}
+
+void WeatherController::setServiceProvider(int provider) {
+    ServiceProvider newProvider = static_cast<ServiceProvider>(provider);
+    if (newProvider != m_serviceProvider) {
+        m_serviceProvider = newProvider;
+        emit serviceProviderChanged();
+        qInfo() << "Service provider changed to:" << serviceProvider();
+    }
+}
+
 void WeatherController::fetchForecast(double latitude, double longitude) {
-    qInfo() << "Fetching forecast for" << latitude << longitude;
+    qInfo() << "Fetching forecast for" << latitude << longitude << "using" << serviceProvider();
     
     m_lastLat = latitude;
     m_lastLon = longitude;
@@ -49,7 +73,7 @@ void WeatherController::fetchForecast(double latitude, double longitude) {
     setLoading(true);
     setErrorMessage("");
     
-    // Check cache first
+    // Check cache first (cache key includes service provider)
     QString cacheKey = generateCacheKey(latitude, longitude);
     QList<WeatherData*> cachedData = loadFromCache(cacheKey);
     
@@ -59,13 +83,21 @@ void WeatherController::fetchForecast(double latitude, double longitude) {
         return;
     }
     
-    // Cache miss - fetch from API (prefer NWS, fallback to Pirate Weather)
-    qDebug() << "Cache miss - fetching from NWS API";
-    m_nwsService->fetchForecast(latitude, longitude);
-    
-    // Also try Pirate Weather if available for nowcasting
-    if (m_pirateService->isAvailable()) {
-        m_pirateService->fetchForecast(latitude, longitude);
+    // Cache miss - fetch from selected service
+    switch (m_serviceProvider) {
+        case NWS:
+            qDebug() << "Cache miss - fetching from NWS API";
+            m_nwsService->fetchForecast(latitude, longitude);
+            break;
+        case PirateWeather:
+            if (m_pirateService->isAvailable()) {
+                qDebug() << "Cache miss - fetching from Pirate Weather API";
+                m_pirateService->fetchForecast(latitude, longitude);
+            } else {
+                setErrorMessage("Pirate Weather API key not available");
+                setLoading(false);
+            }
+            break;
     }
 }
 
@@ -92,16 +124,23 @@ void WeatherController::onForecastReady(QList<WeatherData*> data) {
         return;
     }
     
+    // Set parent for all WeatherData objects to the model so it owns them
+    for (WeatherData* item : data) {
+        if (item) {
+            item->setParent(m_forecastModel);
+        }
+    }
+    
+    // Clear current before clearing model to avoid dangling pointer
+    m_current = nullptr;
+    emit currentChanged();
+    
     // Update model
     m_forecastModel->clear();
     m_forecastModel->addForecasts(data);
     
-    // Set current weather (first item)
-    if (m_current) {
-        m_current->deleteLater();
-    }
+    // Set current weather (first item) - just a reference, model owns it
     m_current = data.first();
-    m_current->setParent(this);
     emit currentChanged();
     
     // Cache the data
@@ -117,11 +156,13 @@ void WeatherController::onCurrentReady(WeatherData* data) {
         return;
     }
     
+    // Set parent to controller since this is standalone current weather
+    data->setParent(this);
+    
     if (m_current) {
         m_current->deleteLater();
     }
     m_current = data;
-    m_current->setParent(this);
     emit currentChanged();
 }
 
@@ -146,7 +187,9 @@ void WeatherController::setErrorMessage(const QString& message) {
 }
 
 QString WeatherController::generateCacheKey(double lat, double lon) const {
-    return CacheManager::generateKey("forecast", lat, lon);
+    // Include service provider in cache key to avoid mixing data from different services
+    QString service = serviceProvider().toLower();
+    return CacheManager::generateKey(QString("forecast_%1").arg(service), lat, lon);
 }
 
 QList<WeatherData*> WeatherController::loadFromCache(const QString& key) {

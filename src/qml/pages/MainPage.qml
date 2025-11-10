@@ -39,11 +39,61 @@ Page {
 
                 Item { Layout.fillWidth: true }
 
+                ComboBox {
+                    id: serviceSelector
+                    Layout.preferredWidth: 180
+                    model: ["NWS", "PirateWeather"]
+                    currentIndex: weatherController.serviceProvider === "NWS" ? 0 : 1
+                    enabled: !weatherController.loading
+                    
+                    onCurrentIndexChanged: {
+                        if (currentIndex === 0) {
+                            weatherController.setServiceProvider(0) // NWS
+                        } else {
+                            weatherController.setServiceProvider(1) // PirateWeather
+                        }
+                    }
+                    
+                    Connections {
+                        target: weatherController
+                        function onServiceProviderChanged() {
+                            if (weatherController.serviceProvider === "NWS") {
+                                serviceSelector.currentIndex = 0
+                            } else {
+                                serviceSelector.currentIndex = 1
+                            }
+                        }
+                    }
+                }
+
                 Button {
                     text: qsTr("Refresh")
                     onClicked: weatherController.refreshForecast()
                     enabled: !weatherController.loading
                 }
+            }
+        }
+
+        // Service Info
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 40
+            color: "white"
+            radius: 5
+            border.color: "#e0e0e0"
+            border.width: 1
+            
+            RowLayout {
+                anchors.fill: parent
+                anchors.margins: 10
+                
+                Text {
+                    text: qsTr("Service: %1").arg(weatherController.serviceProvider)
+                    font.pixelSize: 14
+                    color: "#666"
+                }
+                
+                Item { Layout.fillWidth: true }
             }
         }
 
@@ -92,10 +142,14 @@ Page {
                     }
 
                     Text {
+                        Layout.fillWidth: true
                         text: weatherController.current ? 
                             weatherController.current.weatherCondition : ""
                         font.pixelSize: 18
                         color: "#666"
+                        wrapMode: Text.WordWrap
+                        elide: Text.ElideRight
+                        maximumLineCount: 2
                     }
                 }
 

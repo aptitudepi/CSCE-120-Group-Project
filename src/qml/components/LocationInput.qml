@@ -70,9 +70,12 @@ Rectangle {
         }
 
         Text {
+            Layout.fillWidth: true
             text: qsTr("Example: 30.6272, -96.3344 (College Station, TX)")
             font.pixelSize: 12
             color: "#666"
+            wrapMode: Text.WordWrap
+            elide: Text.ElideRight
         }
     }
 }

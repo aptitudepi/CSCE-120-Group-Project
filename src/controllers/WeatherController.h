@@ -22,8 +22,15 @@ class WeatherController : public QObject
     Q_PROPERTY(WeatherData* current READ current NOTIFY currentChanged)
     Q_PROPERTY(bool loading READ loading NOTIFY loadingChanged)
     Q_PROPERTY(QString errorMessage READ errorMessage NOTIFY errorMessageChanged)
+    Q_PROPERTY(QString serviceProvider READ serviceProvider NOTIFY serviceProviderChanged)
     
 public:
+    enum ServiceProvider {
+        NWS = 0,
+        PirateWeather = 1
+    };
+    Q_ENUM(ServiceProvider)
+    
     explicit WeatherController(QObject *parent = nullptr);
     ~WeatherController() override;
     
@@ -31,10 +38,12 @@ public:
     WeatherData* current() const { return m_current; }
     bool loading() const { return m_loading; }
     QString errorMessage() const { return m_errorMessage; }
+    QString serviceProvider() const;
     
     Q_INVOKABLE void fetchForecast(double latitude, double longitude);
     Q_INVOKABLE void refreshForecast();
     Q_INVOKABLE void clearError();
+    Q_INVOKABLE void setServiceProvider(int provider);
     
 signals:
     void forecastModelChanged();
@@ -42,6 +51,7 @@ signals:
     void loadingChanged();
     void errorMessageChanged();
     void forecastUpdated();
+    void serviceProviderChanged();
     
 private slots:
     void onForecastReady(QList<WeatherData*> data);
@@ -65,6 +75,7 @@ private:
     QString m_errorMessage;
     double m_lastLat;
     double m_lastLon;
+    ServiceProvider m_serviceProvider;
 };
 
 #endif // WEATHERCONTROLLER_H

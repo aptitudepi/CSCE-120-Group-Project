@@ -51,9 +51,12 @@ Rectangle {
         // Condition
         Text {
             Layout.fillWidth: true
+            Layout.maximumWidth: 300
             text: weatherData ? weatherData.weatherCondition : ""
             font.pixelSize: 16
             wrapMode: Text.WordWrap
+            elide: Text.ElideRight
+            maximumLineCount: 2
         }
 
         // Details

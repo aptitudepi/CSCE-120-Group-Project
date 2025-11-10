@@ -1,10 +1,12 @@
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QQmlError>
 #include <QtSql>
 #include <QDebug>
 #include <QStandardPaths>
 #include <QDir>
+#include <QFileInfo>
 #include <unistd.h>
 
 #include "controllers/WeatherController.h"
@@ -50,22 +52,21 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("alertController", &alertController);
     
     // Load main QML file from QML module
-    // With qt6_add_qml_module, the path is: qrc:/qt/qml/<URI>/<filename>
-    const QUrl url(QStringLiteral("qrc:/qt/qml/HyperlocalWeather/main.qml"));
-    
-    // Alternative: If the above doesn't work, try:
-    // const QUrl url(QStringLiteral("qrc:/HyperlocalWeather/main.qml"));
+    // With QTP0001 policy, qt6_add_qml_module creates it at qrc:/qt/qml/HyperlocalWeather/src/qml/main.qml
+    const QUrl url(QStringLiteral("qrc:/qt/qml/HyperlocalWeather/src/qml/main.qml"));
     
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated,
         &app, [url](QObject *obj, const QUrl &objUrl) {
-            if (!obj && url == objUrl)
+            if (!obj && url == objUrl) {
+                qCritical() << "Failed to load QML from:" << objUrl.toString();
                 QCoreApplication::exit(-1);
+            }
         }, Qt::QueuedConnection);
     
     engine.load(url);
     
     if (engine.rootObjects().isEmpty()) {
-        qCritical() << "Failed to load QML";
+        qCritical() << "Failed to load QML from:" << url.toString();
         return -1;
     }
     

@@ -17,6 +17,9 @@ find_package(Qt6 6.4 REQUIRED COMPONENTS
     Positioning
 )
 
+# Set Qt policies to use standard QML module paths
+qt_policy(SET QTP0001 NEW)
+
 # Provide helpful error message if Qt6 not found
 if(NOT Qt6_FOUND)
     message(FATAL_ERROR "Qt6 not found. Please install Qt6 development packages.")
