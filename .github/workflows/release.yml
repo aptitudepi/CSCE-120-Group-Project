@@ -1,0 +1,178 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write  # Needed for creating releases and pushing to gh-pages
+
+jobs:
+  test:
+    name: Run Tests Before Release
+    runs-on: ubuntu-24.04
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install Qt6 and dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          ninja-build \
+          qt6-base-dev \
+          qt6-declarative-dev \
+          qt6-tools-dev \
+          qml6-module-qtquick \
+          qml6-module-qtquick-controls \
+          qml6-module-qtquick-layouts \
+          qml6-module-qtquick-window \
+          libqt6sql6-sqlite \
+          libsqlite3-dev \
+          libgtest-dev \
+          pkg-config \
+          patchelf
+          
+    - name: Build and test
+      run: |
+        mkdir -p build-release
+        cd build-release
+        cmake -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DBUILD_TESTS=ON \
+          ..
+        ninja -j$(nproc)
+        export QT_QPA_PLATFORM=offscreen
+        ctest --output-on-failure -V
+        
+  build-release:
+    name: Build Release
+    needs: test
+    runs-on: ubuntu-24.04
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Get version
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+        else
+          echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Install Qt6 and dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          ninja-build \
+          qt6-base-dev \
+          qt6-declarative-dev \
+          qt6-tools-dev \
+          qml6-module-qtquick \
+          qml6-module-qtquick-controls \
+          qml6-module-qtquick-layouts \
+          qml6-module-qtquick-window \
+          libqt6sql6-sqlite \
+          libsqlite3-dev \
+          pkg-config \
+          patchelf
+          
+    - name: Build release version
+      run: |
+        mkdir -p build-release
+        cd build-release
+        cmake -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          ..
+        ninja -j$(nproc)
+        
+    - name: Package application
+      run: |
+        mkdir -p release-package
+        cp build-release/bin/HyperlocalWeather release-package/
+        cp README.md release-package/
+        cp QUICKSTART.md release-package/ || true
+        cp docs/SETUP.md release-package/ || true
+        cd release-package
+        tar -czf ../hyperlocal-weather-${{ steps.version.outputs.version }}-linux-x86_64.tar.gz .
+        cd ..
+        
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: |
+          hyperlocal-weather-${{ steps.version.outputs.version }}-linux-x86_64.tar.gz
+        body: |
+          ## Hyperlocal Weather Forecasting Application ${{ steps.version.outputs.version }}
+          
+          ### Features
+          - Hyperlocal forecasts with 1km resolution
+          - Multi-source data aggregation (NWS API, Pirate Weather)
+          - Precipitation nowcasting (0-90 minutes)
+          - Geofenced weather alerts
+          - Offline caching with SQLite
+          
+          ### System Requirements
+          - Ubuntu 24.04 or compatible Linux distribution
+          - Qt 6.4 or higher
+          - Internet connection for weather data
+          
+          ### Installation
+          1. Download the release package
+          2. Extract: `tar -xzf hyperlocal-weather-${{ steps.version.outputs.version }}-linux-x86_64.tar.gz`
+          3. Run: `./HyperlocalWeather`
+          
+          ### Documentation
+          See README.md in the package for full documentation.
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Upload release artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: release-package-${{ steps.version.outputs.version }}
+        path: |
+          hyperlocal-weather-${{ steps.version.outputs.version }}-linux-x86_64.tar.gz
+
+  deploy-docs:
+    name: Deploy Documentation
+    needs: build-release
+    runs-on: ubuntu-24.04
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup documentation
+      run: |
+        mkdir -p docs-deploy
+        cp README.md docs-deploy/
+        cp QUICKSTART.md docs-deploy/ || true
+        cp ARCHITECTURE_SUMMARY.md docs-deploy/ || true
+        cp -r docs/* docs-deploy/ 2>/dev/null || true
+        
+    - name: Deploy to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./docs-deploy
+        publish_branch: gh-pages

@@ -1,0 +1,199 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master, develop, copilot/** ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-24.04
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Release, Debug]
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install Qt6 and dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          ninja-build \
+          qt6-base-dev \
+          qt6-declarative-dev \
+          qt6-tools-dev \
+          qml6-module-qtquick \
+          qml6-module-qtquick-controls \
+          qml6-module-qtquick-layouts \
+          qml6-module-qtquick-window \
+          libqt6sql6-sqlite \
+          libsqlite3-dev \
+          libgtest-dev \
+          pkg-config \
+          patchelf \
+          lcov
+          
+    - name: Cache build artifacts
+      uses: actions/cache@v3
+      with:
+        path: |
+          build-${{ matrix.build_type }}
+          ~/.cache/ccache
+        key: ${{ runner.os }}-build-${{ matrix.build_type }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cpp', '**/*.h') }}
+        restore-keys: |
+          ${{ runner.os }}-build-${{ matrix.build_type }}-
+          ${{ runner.os }}-build-
+          
+    - name: Configure CMake
+      run: |
+        mkdir -p build-${{ matrix.build_type }}
+        cd build-${{ matrix.build_type }}
+        cmake -G Ninja \
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DBUILD_TESTS=ON \
+          ..
+          
+    - name: Build
+      run: |
+        cd build-${{ matrix.build_type }}
+        ninja -j$(nproc)
+        
+    - name: Run tests
+      run: |
+        cd build-${{ matrix.build_type }}
+        export QT_QPA_PLATFORM=offscreen
+        ctest --output-on-failure -V
+        
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-results-${{ matrix.build_type }}
+        path: |
+          build-${{ matrix.build_type }}/Testing/**/*.xml
+          
+    - name: Upload build artifacts
+      if: matrix.build_type == 'Release'
+      uses: actions/upload-artifact@v3
+      with:
+        name: hyperlocal-weather-${{ github.sha }}
+        path: |
+          build-${{ matrix.build_type }}/bin/HyperlocalWeather
+
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-24.04
+    needs: build-and-test
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install Qt6 and dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          ninja-build \
+          qt6-base-dev \
+          qt6-declarative-dev \
+          qt6-tools-dev \
+          qml6-module-qtquick \
+          qml6-module-qtquick-controls \
+          qml6-module-qtquick-layouts \
+          qml6-module-qtquick-window \
+          libqt6sql6-sqlite \
+          libsqlite3-dev \
+          libgtest-dev \
+          pkg-config \
+          patchelf \
+          lcov \
+          gcovr
+          
+    - name: Build with coverage
+      run: |
+        mkdir -p build-coverage
+        cd build-coverage
+        cmake -G Ninja \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DBUILD_TESTS=ON \
+          -DENABLE_COVERAGE=ON \
+          ..
+        ninja -j$(nproc)
+        
+    - name: Run tests with coverage
+      run: |
+        cd build-coverage
+        export QT_QPA_PLATFORM=offscreen
+        ctest --output-on-failure
+        
+    - name: Generate coverage report
+      run: |
+        cd build-coverage
+        lcov --capture --directory . --output-file coverage.info || true
+        lcov --remove coverage.info '/usr/*' '*/tests/*' '*/build/*' --output-file coverage.info || true
+        lcov --list coverage.info || true
+        
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./build-coverage/coverage.info
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+        
+    - name: Upload coverage artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage-report
+        path: |
+          build-coverage/coverage.info
+          build-coverage/coverage/
+
+  lint:
+    name: Code Quality
+    runs-on: ubuntu-24.04
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install analysis tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cppcheck clang-format
+        
+    - name: Run cppcheck
+      run: |
+        cppcheck --enable=all \
+          --suppress=missingIncludeSystem \
+          --suppress=unusedFunction \
+          --std=c++17 \
+          --error-exitcode=0 \
+          src/ 2>&1 | tee cppcheck-report.txt
+          
+    - name: Check code formatting
+      run: |
+        find src tests -name "*.cpp" -o -name "*.h" | \
+          xargs clang-format -i -style="{BasedOnStyle: Google, IndentWidth: 4}" --dry-run -Werror 2>&1 | \
+          tee format-check.txt || echo "Formatting differences found (non-blocking)"
+          
+    - name: Upload lint results
+      uses: actions/upload-artifact@v3
+      with:
+        name: lint-results
+        path: |
+          cppcheck-report.txt
+          format-check.txt

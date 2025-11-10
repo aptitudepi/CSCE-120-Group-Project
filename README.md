@@ -1,8 +1,8 @@
 # Hyperlocal Weather Forecasting Application
 
-[![CI/CD Pipeline](https://github.com/MaroonPtrs/HyperlocalWeather/workflows/CI%2FCD%20Pipeline/badge.svg)](https://github.com/MaroonPtrs/HyperlocalWeather/actions)
-[![Build and Test](https://github.com/MaroonPtrs/HyperlocalWeather/workflows/Build%20and%20Test/badge.svg)](https://github.com/MaroonPtrs/HyperlocalWeather/actions)
-[![Release](https://github.com/MaroonPtrs/HyperlocalWeather/workflows/Release/badge.svg)](https://github.com/MaroonPtrs/HyperlocalWeather/actions)
+[![CI/CD Pipeline](https://github.com/aptitudepi/CSCE-120-Group-Project/workflows/CI%2FCD%20Pipeline/badge.svg)](https://github.com/aptitudepi/CSCE-120-Group-Project/actions)
+[![Build and Test](https://github.com/aptitudepi/CSCE-120-Group-Project/workflows/Build%20and%20Test/badge.svg)](https://github.com/aptitudepi/CSCE-120-Group-Project/actions)
+[![Release](https://github.com/aptitudepi/CSCE-120-Group-Project/workflows/Release/badge.svg)](https://github.com/aptitudepi/CSCE-120-Group-Project/actions)
 
 A Qt6/QML desktop application for hyperlocal weather forecasting with precipitation nowcasting, multi-source data aggregation, and geofenced alerts.
 
@@ -92,6 +92,24 @@ HyperlocalWeather/
 - **Uptime**: > 95% service availability
 - **Alert Lead Time**: > 5 minutes median
 - **Test Coverage**: > 80% on critical backend modules
+
+## CI/CD Pipeline
+
+This project uses GitHub Actions for continuous integration and deployment:
+
+- **Automated Builds**: Every push triggers automatic builds in Release and Debug modes
+- **Automated Testing**: Full test suite runs on every push and pull request
+- **Code Coverage**: Coverage reports generated and tracked
+- **Code Quality**: Static analysis and formatting checks
+- **Automated Releases**: Tag a version to automatically create a release package
+
+**Creating a Release:**
+```bash
+git tag -a v1.0.0 -m "Release version 1.0.0"
+git push origin v1.0.0
+```
+
+See [docs/CI-CD.md](docs/CI-CD.md) for complete CI/CD documentation.
 
 ## License
 
