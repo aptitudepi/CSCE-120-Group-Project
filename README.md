@@ -1,8 +1,8 @@
 # Hyperlocal Weather Forecasting Application
 
-[![CI/CD Pipeline](https://github.com/MaroonPtrs/HyperlocalWeather/workflows/CI%2FCD%20Pipeline/badge.svg)](https://github.com/MaroonPtrs/HyperlocalWeather/actions)
-[![Build and Test](https://github.com/MaroonPtrs/HyperlocalWeather/workflows/Build%20and%20Test/badge.svg)](https://github.com/MaroonPtrs/HyperlocalWeather/actions)
-[![Release](https://github.com/MaroonPtrs/HyperlocalWeather/workflows/Release/badge.svg)](https://github.com/MaroonPtrs/HyperlocalWeather/actions)
+[![CI/CD Pipeline](https://github.com/aptitudepi/CSCE-120-Group-Project/workflows/CI%2FCD%20Pipeline/badge.svg)](https://github.com/aptitudepi/CSCE-120-Group-Project/actions)
+[![Build and Test](https://github.com/aptitudepi/CSCE-120-Group-Project/workflows/Build%20and%20Test/badge.svg)](https://github.com/aptitudepi/CSCE-120-Group-Project/actions)
+[![Release](https://github.com/aptitudepi/CSCE-120-Group-Project/workflows/Release/badge.svg)](https://github.com/aptitudepi/CSCE-120-Group-Project/actions)
 
 A Qt6/QML desktop application for hyperlocal weather forecasting with precipitation nowcasting, multi-source data aggregation, and geofenced alerts.
 
