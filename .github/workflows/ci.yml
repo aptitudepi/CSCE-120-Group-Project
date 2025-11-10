@@ -77,7 +77,7 @@ jobs:
         
     - name: Upload test results
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: test-results-${{ matrix.build_type }}
         path: |
@@ -85,7 +85,7 @@ jobs:
           
     - name: Upload build artifacts
       if: matrix.build_type == 'Release'
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: hyperlocal-weather-${{ github.sha }}
         path: |
@@ -155,7 +155,7 @@ jobs:
         fail_ci_if_error: false
         
     - name: Upload coverage artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: coverage-report
         path: |
@@ -191,7 +191,7 @@ jobs:
           tee format-check.txt || echo "Formatting differences found (non-blocking)"
           
     - name: Upload lint results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: lint-results
         path: |
