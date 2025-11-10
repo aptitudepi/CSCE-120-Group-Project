@@ -93,6 +93,24 @@ HyperlocalWeather/
 - **Alert Lead Time**: > 5 minutes median
 - **Test Coverage**: > 80% on critical backend modules
 
+## CI/CD Pipeline
+
+This project uses GitHub Actions for continuous integration and deployment:
+
+- **Automated Builds**: Every push triggers automatic builds in Release and Debug modes
+- **Automated Testing**: Full test suite runs on every push and pull request
+- **Code Coverage**: Coverage reports generated and tracked
+- **Code Quality**: Static analysis and formatting checks
+- **Automated Releases**: Tag a version to automatically create a release package
+
+**Creating a Release:**
+```bash
+git tag -a v1.0.0 -m "Release version 1.0.0"
+git push origin v1.0.0
+```
+
+See [docs/CI-CD.md](docs/CI-CD.md) for complete CI/CD documentation.
+
 ## License
 
 Open source project for educational purposes.
