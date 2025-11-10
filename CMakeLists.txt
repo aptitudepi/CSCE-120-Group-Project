@@ -42,6 +42,8 @@ set(SOURCES
     src/services/NWSService.cpp
     src/services/PirateWeatherService.cpp
     src/services/CacheManager.cpp
+    src/services/WeatherAggregator.cpp
+    src/services/PerformanceMonitor.cpp
     src/controllers/WeatherController.cpp
     src/controllers/AlertController.cpp
     src/database/DatabaseManager.cpp
@@ -56,6 +58,8 @@ set(HEADERS
     src/services/NWSService.h
     src/services/PirateWeatherService.h
     src/services/CacheManager.h
+    src/services/WeatherAggregator.h
+    src/services/PerformanceMonitor.h
     src/controllers/WeatherController.h
     src/controllers/AlertController.h
     src/database/DatabaseManager.h
