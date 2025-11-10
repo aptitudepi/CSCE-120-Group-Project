@@ -46,6 +46,7 @@ private slots:
 private:
     void loadAlertsFromDatabase();
     void checkAlertConditions(AlertModel* alert);
+    void checkAlertConditions(AlertModel* alert, WeatherData* currentWeather);
     bool evaluateThreshold(const QString& type, double value, double threshold);
     
     QList<AlertModel*> m_alerts;

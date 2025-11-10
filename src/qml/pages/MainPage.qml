@@ -5,6 +5,8 @@ import HyperlocalWeather 1.0
 
 Page {
     id: mainPage
+    
+    signal settingsRequested()
 
     background: Rectangle {
         color: "#f0f0f0"
@@ -42,26 +44,27 @@ Page {
                 ComboBox {
                     id: serviceSelector
                     Layout.preferredWidth: 180
-                    model: ["NWS", "PirateWeather"]
-                    currentIndex: weatherController.serviceProvider === "NWS" ? 0 : 1
+                    model: ["NWS", "PirateWeather", "Aggregated"]
+                    currentIndex: {
+                        var provider = weatherController.serviceProvider
+                        if (provider === "NWS") return 0
+                        if (provider === "PirateWeather") return 1
+                        if (provider === "Aggregated") return 2
+                        return 0
+                    }
                     enabled: !weatherController.loading
                     
                     onCurrentIndexChanged: {
-                        if (currentIndex === 0) {
-                            weatherController.setServiceProvider(0) // NWS
-                        } else {
-                            weatherController.setServiceProvider(1) // PirateWeather
-                        }
+                        weatherController.setServiceProvider(currentIndex)
                     }
                     
                     Connections {
                         target: weatherController
                         function onServiceProviderChanged() {
-                            if (weatherController.serviceProvider === "NWS") {
-                                serviceSelector.currentIndex = 0
-                            } else {
-                                serviceSelector.currentIndex = 1
-                            }
+                            var provider = weatherController.serviceProvider
+                            if (provider === "NWS") serviceSelector.currentIndex = 0
+                            else if (provider === "PirateWeather") serviceSelector.currentIndex = 1
+                            else if (provider === "Aggregated") serviceSelector.currentIndex = 2
                         }
                     }
                 }
@@ -70,6 +73,11 @@ Page {
                     text: qsTr("Refresh")
                     onClicked: weatherController.refreshForecast()
                     enabled: !weatherController.loading
+                }
+                
+                Button {
+                    text: qsTr("Settings")
+                    onClicked: mainPage.settingsRequested()
                 }
             }
         }

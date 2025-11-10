@@ -1,5 +1,9 @@
 # Hyperlocal Weather Forecasting Application
 
+[![CI/CD Pipeline](https://github.com/MaroonPtrs/HyperlocalWeather/workflows/CI%2FCD%20Pipeline/badge.svg)](https://github.com/MaroonPtrs/HyperlocalWeather/actions)
+[![Build and Test](https://github.com/MaroonPtrs/HyperlocalWeather/workflows/Build%20and%20Test/badge.svg)](https://github.com/MaroonPtrs/HyperlocalWeather/actions)
+[![Release](https://github.com/MaroonPtrs/HyperlocalWeather/workflows/Release/badge.svg)](https://github.com/MaroonPtrs/HyperlocalWeather/actions)
+
 A Qt6/QML desktop application for hyperlocal weather forecasting with precipitation nowcasting, multi-source data aggregation, and geofenced alerts.
 
 ## Team: MaroonPtrs
@@ -35,9 +39,29 @@ A Qt6/QML desktop application for hyperlocal weather forecasting with precipitat
 
 **For Ubuntu 24.04 WSL:**
 
-1. Install dependencies (see [SETUP.md](docs/SETUP.md))
-2. Build: `mkdir build && cd build && cmake -G Ninja .. && ninja`
-3. Run: `./HyperlocalWeather`
+1. Install dependencies: `make install-deps` (or see [SETUP.md](docs/SETUP.md))
+2. Build: `make build`
+3. Run: `make run`
+
+**Using Makefile (Recommended):**
+
+```bash
+make help          # Show all available targets
+make build         # Build release version
+make build-debug   # Build debug version
+make test          # Run all tests
+make coverage      # Generate coverage report
+make run           # Run the application
+```
+
+**Manual Build (Alternative):**
+
+```bash
+mkdir build && cd build
+cmake -G Ninja -DCMAKE_BUILD_TYPE=Release ..
+ninja
+./bin/HyperlocalWeather
+```
 
 See detailed instructions in:
 - [QUICKSTART.md](QUICKSTART.md) - Quick setup guide

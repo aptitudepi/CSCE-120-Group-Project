@@ -1,0 +1,39 @@
+# CI/CD Makefile - Simplified targets for continuous integration
+# This file is included by the main Makefile for CI environments
+
+# CI-specific variables
+CI_BUILD_DIR := build-ci
+CI_JOBS := 4
+
+.PHONY: ci-setup ci-build ci-test ci-coverage ci-install ci-clean
+
+ci-setup: ## CI: Setup build environment
+	@mkdir -p $(CI_BUILD_DIR)
+	@cd $(CI_BUILD_DIR) && \
+		$(CMAKE) -G $(CMAKE_GENERATOR) \
+			-DCMAKE_BUILD_TYPE=$(BUILD_TYPE_RELEASE) \
+			-DBUILD_TESTS=ON \
+			..
+
+ci-build: ci-setup ## CI: Build project
+	@cd $(CI_BUILD_DIR) && $(NINJA) -j$(CI_JOBS)
+
+ci-test: ci-build ## CI: Run tests
+	@cd $(CI_BUILD_DIR) && \
+		export QT_QPA_PLATFORM=offscreen && \
+		$(CTEST) --output-on-failure -T Test --no-compress-output
+
+ci-coverage: ci-setup ## CI: Build with coverage
+	@cd $(CI_BUILD_DIR) && \
+		$(CMAKE) -DENABLE_COVERAGE=ON . && \
+		$(NINJA) -j$(CI_JOBS) && \
+		export QT_QPA_PLATFORM=offscreen && \
+		$(CTEST) --output-on-failure && \
+		$(NINJA) coverage 2>/dev/null || true
+
+ci-install: ci-build ## CI: Install (for packaging)
+	@cd $(CI_BUILD_DIR) && $(NINJA) install DESTDIR=$(PWD)/install
+
+ci-clean: ## CI: Clean CI build
+	@rm -rf $(CI_BUILD_DIR) install
+

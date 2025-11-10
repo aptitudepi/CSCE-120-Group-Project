@@ -52,8 +52,8 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("alertController", &alertController);
     
     // Load main QML file from QML module
-    // With QTP0001 policy, qt6_add_qml_module creates it at qrc:/qt/qml/HyperlocalWeather/src/qml/main.qml
-    const QUrl url(QStringLiteral("qrc:/qt/qml/HyperlocalWeather/src/qml/main.qml"));
+    // With qt6_add_qml_module, the QML files are available at qrc:/qt/qml/HyperlocalWeather/main.qml
+    const QUrl url(QStringLiteral("qrc:/qt/qml/HyperlocalWeather/main.qml"));
     
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated,
         &app, [url](QObject *obj, const QUrl &objUrl) {

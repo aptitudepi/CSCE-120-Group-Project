@@ -80,6 +80,7 @@ qt6_add_qml_module(HyperlocalWeather
     QML_FILES
         src/qml/main.qml
         src/qml/pages/MainPage.qml
+        src/qml/pages/SettingsPage.qml
         src/qml/components/ForecastCard.qml
         src/qml/components/LocationInput.qml
         src/qml/components/AlertItem.qml

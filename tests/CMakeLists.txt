@@ -47,6 +47,8 @@ set(TEST_SOURCES
     models/test_WeatherData.cpp
     services/test_CacheManager.cpp
     services/test_NWSService.cpp
+    services/test_WeatherAggregator.cpp
+    services/test_PerformanceMonitor.cpp
     integration/test_EndToEnd.cpp
 )
 
@@ -113,6 +115,8 @@ target_sources(HyperlocalWeatherTests PRIVATE
     ${CMAKE_SOURCE_DIR}/src/services/NWSService.cpp
     ${CMAKE_SOURCE_DIR}/src/services/PirateWeatherService.cpp
     ${CMAKE_SOURCE_DIR}/src/services/CacheManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/WeatherAggregator.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/PerformanceMonitor.cpp
     ${CMAKE_SOURCE_DIR}/src/controllers/WeatherController.cpp
     ${CMAKE_SOURCE_DIR}/src/controllers/AlertController.cpp
     ${CMAKE_SOURCE_DIR}/src/database/DatabaseManager.cpp

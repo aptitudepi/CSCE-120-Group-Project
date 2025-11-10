@@ -12,9 +12,28 @@ ApplicationWindow {
     visible: true
     title: qsTr("Hyperlocal Weather")
 
-    // Main page
-    MainPage {
+    // Navigation stack
+    StackView {
+        id: stackView
         anchors.fill: parent
+        initialItem: mainPage
+        
+        Component {
+            id: mainPage
+            MainPage {
+                onSettingsRequested: {
+                    var page = settingsPage.createObject(stackView)
+                    page.parentStackView = stackView
+                    stackView.push(page)
+                }
+            }
+        }
+        
+        Component {
+            id: settingsPage
+            SettingsPage {
+            }
+        }
     }
 
     // Error dialog (using popup instead of MessageDialog for Qt 6)

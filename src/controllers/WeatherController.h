@@ -8,6 +8,9 @@
 #include "services/NWSService.h"
 #include "services/PirateWeatherService.h"
 #include "services/CacheManager.h"
+#include "services/WeatherAggregator.h"
+#include "services/PerformanceMonitor.h"
+#include "nowcast/NowcastEngine.h"
 
 /**
  * @brief Main controller for weather data management
@@ -23,11 +26,14 @@ class WeatherController : public QObject
     Q_PROPERTY(bool loading READ loading NOTIFY loadingChanged)
     Q_PROPERTY(QString errorMessage READ errorMessage NOTIFY errorMessageChanged)
     Q_PROPERTY(QString serviceProvider READ serviceProvider NOTIFY serviceProviderChanged)
+    Q_PROPERTY(PerformanceMonitor* performanceMonitor READ performanceMonitor NOTIFY performanceMonitorChanged)
+    Q_PROPERTY(bool useAggregation READ useAggregation WRITE setUseAggregation NOTIFY useAggregationChanged)
     
 public:
     enum ServiceProvider {
         NWS = 0,
-        PirateWeather = 1
+        PirateWeather = 1,
+        Aggregated = 2
     };
     Q_ENUM(ServiceProvider)
     
@@ -39,11 +45,15 @@ public:
     bool loading() const { return m_loading; }
     QString errorMessage() const { return m_errorMessage; }
     QString serviceProvider() const;
+    PerformanceMonitor* performanceMonitor() const { return m_performanceMonitor; }
+    bool useAggregation() const { return m_useAggregation; }
+    void setUseAggregation(bool use);
     
     Q_INVOKABLE void fetchForecast(double latitude, double longitude);
     Q_INVOKABLE void refreshForecast();
     Q_INVOKABLE void clearError();
     Q_INVOKABLE void setServiceProvider(int provider);
+    Q_INVOKABLE void fetchNowcast(double latitude, double longitude);
     
 signals:
     void forecastModelChanged();
@@ -52,11 +62,16 @@ signals:
     void errorMessageChanged();
     void forecastUpdated();
     void serviceProviderChanged();
+    void performanceMonitorChanged();
+    void useAggregationChanged();
+    void nowcastReady(QList<WeatherData*> nowcast);
     
 private slots:
     void onForecastReady(QList<WeatherData*> data);
     void onCurrentReady(WeatherData* data);
     void onServiceError(QString error);
+    void onAggregatorForecastReady(QList<WeatherData*> data);
+    void onAggregatorError(QString error);
     
 private:
     void setLoading(bool loading);
@@ -70,12 +85,16 @@ private:
     NWSService* m_nwsService;
     PirateWeatherService* m_pirateService;
     CacheManager* m_cache;
+    WeatherAggregator* m_aggregator;
+    PerformanceMonitor* m_performanceMonitor;
+    NowcastEngine* m_nowcastEngine;
     
     bool m_loading;
     QString m_errorMessage;
     double m_lastLat;
     double m_lastLon;
     ServiceProvider m_serviceProvider;
+    bool m_useAggregation;
 };
 
 #endif // WEATHERCONTROLLER_H

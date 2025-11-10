@@ -144,17 +144,13 @@ void AlertController::onForecastReady(QList<WeatherData*> data) {
             continue;
         }
         
-        // Check if location matches (simplified - should check distance)
-        double latDiff = qAbs(alert->latitude() - current->latitude());
-        double lonDiff = qAbs(alert->longitude() - current->longitude());
-        
-        if (latDiff < 0.01 && lonDiff < 0.01) {
-            checkAlertConditions(alert);
-        }
+        // Check alert conditions with current weather data
+        checkAlertConditions(alert, current);
     }
     
-    // Clean up
-    qDeleteAll(data);
+    // Clean up - note: data items may be owned by other objects
+    // Only delete if we own them
+    // For now, assume they're managed elsewhere
 }
 
 void AlertController::onCheckTimer() {
@@ -188,8 +184,9 @@ void AlertController::loadAlertsFromDatabase() {
 }
 
 void AlertController::checkAlertConditions(AlertModel* alert) {
-    // This is a placeholder - in real implementation, we'd have current weather data
-    // For now, we'll trigger based on forecast data received
+    if (!alert || !alert->enabled()) {
+        return;
+    }
     
     // Prevent duplicate triggers within 1 hour
     if (m_lastTriggered.contains(alert->id())) {
@@ -199,20 +196,90 @@ void AlertController::checkAlertConditions(AlertModel* alert) {
         }
     }
     
-    // In a real implementation, we'd evaluate the threshold here
-    // For now, this is a placeholder
-    m_lastTriggered[alert->id()] = QDateTime::currentDateTime();
-    alert->setLastTriggered(QDateTime::currentDateTime());
+    // This method is called when forecast data is received
+    // In a real implementation, we'd have current weather data here
+    // For now, we'll use the first forecast item as current weather
+    // Note: This is a simplified implementation - ideally we'd fetch current weather
+}
+
+void AlertController::checkAlertConditions(AlertModel* alert, WeatherData* currentWeather) {
+    if (!alert || !alert->enabled() || !currentWeather) {
+        return;
+    }
     
-    QString message = QString("Alert triggered: %1 threshold exceeded")
-        .arg(alert->alertType());
-    emit alertTriggered(alert, message);
+    // Prevent duplicate triggers within 1 hour
+    if (m_lastTriggered.contains(alert->id())) {
+        QDateTime lastTriggered = m_lastTriggered[alert->id()];
+        if (lastTriggered.secsTo(QDateTime::currentDateTime()) < 3600) {
+            return;
+        }
+    }
+    
+    // Check if location matches (within 10km radius - simplified)
+    double latDiff = qAbs(alert->latitude() - currentWeather->latitude());
+    double lonDiff = qAbs(alert->longitude() - currentWeather->longitude());
+    
+    // Rough distance check (1 degree ≈ 111km, so 0.1 degree ≈ 11km)
+    if (latDiff > 0.1 || lonDiff > 0.1) {
+        return; // Location doesn't match
+    }
+    
+    // Evaluate threshold based on alert type
+    bool thresholdMet = false;
+    double currentValue = 0.0;
+    QString alertType = alert->alertType().toLower();
+    
+    if (alertType == "precipitation" || alertType == "precip") {
+        currentValue = currentWeather->precipIntensity();
+        thresholdMet = evaluateThreshold("precipitation", currentValue, alert->threshold());
+    } else if (alertType == "temperature" || alertType == "temp") {
+        currentValue = currentWeather->temperature();
+        thresholdMet = evaluateThreshold("temperature", currentValue, alert->threshold());
+    } else if (alertType == "windspeed" || alertType == "wind") {
+        currentValue = currentWeather->windSpeed();
+        thresholdMet = evaluateThreshold("windSpeed", currentValue, alert->threshold());
+    } else if (alertType == "humidity") {
+        currentValue = currentWeather->humidity();
+        thresholdMet = evaluateThreshold("humidity", currentValue, alert->threshold());
+    } else if (alertType == "pressure") {
+        currentValue = currentWeather->pressure();
+        thresholdMet = evaluateThreshold("pressure", currentValue, alert->threshold());
+    }
+    
+    if (thresholdMet) {
+        m_lastTriggered[alert->id()] = QDateTime::currentDateTime();
+        alert->setLastTriggered(QDateTime::currentDateTime());
+        m_dbManager->updateAlertLastTriggered(alert->id(), QDateTime::currentDateTime());
+        
+        QString message = QString("Alert triggered: %1 is %2 (threshold: %3)")
+            .arg(alert->alertType())
+            .arg(currentValue, 0, 'f', 1)
+            .arg(alert->threshold(), 0, 'f', 1);
+        emit alertTriggered(alert, message);
+    }
 }
 
 bool AlertController::evaluateThreshold(const QString& type, double value, double threshold) {
-    if (type == "precipitation" || type == "temperature" || type == "windSpeed") {
+    QString alertType = type.toLower();
+    
+    // For most metrics, check if value exceeds threshold
+    if (alertType == "precipitation" || alertType == "precip" ||
+        alertType == "windspeed" || alertType == "wind" ||
+        alertType == "humidity") {
         return value >= threshold;
     }
+    
+    // For temperature, check if it's above or below threshold
+    // (could be "above 90F" or "below 32F" - simplified to above)
+    if (alertType == "temperature" || alertType == "temp") {
+        return value >= threshold;
+    }
+    
+    // For pressure, check if it's above or below threshold
+    if (alertType == "pressure") {
+        return value >= threshold;
+    }
+    
     return false;
 }
 
