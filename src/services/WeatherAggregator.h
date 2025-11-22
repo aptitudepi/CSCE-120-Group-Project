@@ -6,6 +6,7 @@
 #include <QTimer>
 #include <QElapsedTimer>
 #include "services/WeatherService.h"
+#include "services/MovingAverageFilter.h"
 #include "models/WeatherData.h"
 
 /**
@@ -40,6 +41,26 @@ public:
      * @brief Set aggregation strategy
      */
     void setStrategy(AggregationStrategy strategy);
+    
+    /**
+     * @brief Enable/disable moving average smoothing
+     */
+    void setMovingAverageEnabled(bool enabled);
+    
+    /**
+     * @brief Set moving average window size
+     */
+    void setMovingAverageWindowSize(int windowSize);
+    
+    /**
+     * @brief Set moving average type
+     */
+    void setMovingAverageType(MovingAverageFilter::MovingAverageType type);
+    
+    /**
+     * @brief Set EMA alpha (smoothing factor)
+     */
+    void setMovingAverageAlpha(double alpha);
     
     /**
      * @brief Fetch forecast using aggregation strategy
@@ -84,14 +105,24 @@ private:
     };
     
     void updateServiceAvailability(WeatherService* service, bool success, qint64 responseTime);
-    QList<WeatherData*> mergeForecasts(const QList<QList<WeatherData*>>& forecasts);
+    QList<WeatherData*> mergeForecasts(const QList<ForecastWithService>& forecastsWithServices);
     WeatherData* mergeCurrentWeather(const QList<WeatherData*>& currentData);
     double calculateConfidence(WeatherService* service) const;
+    double calculateWeight(WeatherService* service, qint64 responseTime) const;
+    QDateTime binTimestamp(const QDateTime& timestamp, int binMinutes = 30) const;
+    
+    struct ForecastWithService {
+        QList<WeatherData*> forecasts;
+        WeatherService* service;
+        qint64 responseTime;
+    };
     
     QList<ServiceEntry> m_services;
     AggregationStrategy m_strategy;
     QElapsedTimer m_requestTimer;
     QTimer* m_timeoutTimer;
+    MovingAverageFilter* m_movingAverageFilter;
+    bool m_movingAverageEnabled;
     
     // Performance tracking
     QList<qint64> m_responseTimes;
@@ -103,7 +134,18 @@ private:
     
     // Request tracking
     QMap<QString, QList<WeatherService*>> m_pendingRequests; // cacheKey -> services
+    struct ForecastWithService {
+        QList<WeatherData*> forecasts;
+        WeatherService* service;
+        qint64 responseTime;
+    };
+    QMap<QString, QList<ForecastWithService>> m_pendingForecasts; // cacheKey -> list of (forecasts, service, responseTime)
+    QMap<QString, QList<WeatherData*>> m_pendingCurrentWeather; // cacheKey -> list of current weather
+    QMap<QString, QList<WeatherService*>> m_receivedServices; // cacheKey -> services that have responded
+    QMap<QString, QMap<WeatherService*, qint64>> m_serviceResponseTimes; // cacheKey -> service -> responseTime
     QString m_currentRequestKey;
+    double m_currentLat;
+    double m_currentLon;
 };
 
 #endif // WEATHERAGGREGATOR_H

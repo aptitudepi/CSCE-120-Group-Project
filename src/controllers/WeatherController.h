@@ -10,6 +10,7 @@
 #include "services/CacheManager.h"
 #include "services/WeatherAggregator.h"
 #include "services/PerformanceMonitor.h"
+#include "services/HistoricalDataManager.h"
 #include "nowcast/NowcastEngine.h"
 
 /**
@@ -87,6 +88,7 @@ private:
     CacheManager* m_cache;
     WeatherAggregator* m_aggregator;
     PerformanceMonitor* m_performanceMonitor;
+    HistoricalDataManager* m_historicalManager;
     NowcastEngine* m_nowcastEngine;
     
     bool m_loading;

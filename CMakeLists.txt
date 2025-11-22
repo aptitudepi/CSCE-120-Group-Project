@@ -44,6 +44,8 @@ set(SOURCES
     src/services/CacheManager.cpp
     src/services/WeatherAggregator.cpp
     src/services/PerformanceMonitor.cpp
+    src/services/HistoricalDataManager.cpp
+    src/services/MovingAverageFilter.cpp
     src/controllers/WeatherController.cpp
     src/controllers/AlertController.cpp
     src/database/DatabaseManager.cpp
@@ -60,6 +62,8 @@ set(HEADERS
     src/services/CacheManager.h
     src/services/WeatherAggregator.h
     src/services/PerformanceMonitor.h
+    src/services/HistoricalDataManager.h
+    src/services/MovingAverageFilter.h
     src/controllers/WeatherController.h
     src/controllers/AlertController.h
     src/database/DatabaseManager.h

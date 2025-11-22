@@ -55,6 +55,9 @@ public:
     bool deleteCacheEntry(const QString& key);
     void cleanupExpiredCache();
     
+    // Get database connection for use by other managers
+    QSqlDatabase database() const { return m_database; }
+    
 private:
     explicit DatabaseManager(QObject *parent = nullptr);
     ~DatabaseManager() override;

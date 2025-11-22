@@ -23,6 +23,7 @@ WeatherController::WeatherController(QObject *parent)
     , m_cache(new CacheManager(50, this))
     , m_aggregator(new WeatherAggregator(this))
     , m_performanceMonitor(new PerformanceMonitor(this))
+    , m_historicalManager(new HistoricalDataManager(this))
     , m_nowcastEngine(new NowcastEngine(this))
     , m_loading(false)
     , m_lastLat(0.0)
@@ -33,10 +34,17 @@ WeatherController::WeatherController(QObject *parent)
     // Set Pirate Weather API key
     m_pirateService->setApiKey("WsdojoTv0GEHU60N9mwRXuXoXc9tOama");
     
+    // Initialize historical data manager
+    m_historicalManager->initialize();
+    
     // Setup aggregator with services
     m_aggregator->addService(m_nwsService, 10); // Higher priority for NWS
     m_aggregator->addService(m_pirateService, 5);
-    m_aggregator->setStrategy(WeatherAggregator::Fallback); // Use fallback strategy
+    m_aggregator->setStrategy(WeatherAggregator::WeightedAverage); // Use weighted average strategy
+    m_aggregator->setMovingAverageEnabled(true); // Enable moving average smoothing
+    m_aggregator->setMovingAverageWindowSize(10);
+    m_aggregator->setMovingAverageType(MovingAverageFilter::Exponential);
+    m_aggregator->setMovingAverageAlpha(0.2);
     
     // Connect NWS service
     connect(m_nwsService, &NWSService::forecastReady,
@@ -87,6 +95,8 @@ void WeatherController::setUseAggregation(bool use) {
         m_useAggregation = use;
         if (use) {
             m_serviceProvider = Aggregated;
+            // Set aggregator to weighted average when aggregation is enabled
+            m_aggregator->setStrategy(WeatherAggregator::WeightedAverage);
             emit serviceProviderChanged();
         }
         emit useAggregationChanged();
@@ -192,6 +202,15 @@ void WeatherController::onForecastReady(QList<WeatherData*> data) {
     // Record service up
     m_performanceMonitor->recordServiceUp(serviceProvider());
     
+    // Store forecasts to historical storage
+    if (m_historicalManager) {
+        QString source = serviceProvider().toLower();
+        if (m_useAggregation && m_serviceProvider == Aggregated) {
+            source = "merged";
+        }
+        m_historicalManager->storeForecasts(m_lastLat, m_lastLon, data, source);
+    }
+    
     // Set parent for all WeatherData objects to the model so it owns them
     for (WeatherData* item : data) {
         if (item) {
@@ -220,7 +239,10 @@ void WeatherController::onForecastReady(QList<WeatherData*> data) {
 }
 
 void WeatherController::onAggregatorForecastReady(QList<WeatherData*> data) {
-    // Same handling as regular forecast ready
+    // Store individual source forecasts before merging
+    // Note: Individual source data is stored in onServiceForecastReady before merging
+    
+    // Same handling as regular forecast ready (stores merged forecasts)
     onForecastReady(data);
 }
 

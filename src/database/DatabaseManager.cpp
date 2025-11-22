@@ -142,10 +142,44 @@ bool DatabaseManager::createTables() {
         return false;
     }
     
+    // Historical weather table for time-series data
+    QString createHistoricalWeather = R"(
+        CREATE TABLE IF NOT EXISTS historical_weather (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            latitude REAL NOT NULL,
+            longitude REAL NOT NULL,
+            timestamp DATETIME NOT NULL,
+            source TEXT NOT NULL,
+            temperature REAL,
+            precip_probability REAL,
+            precip_intensity REAL,
+            wind_speed REAL,
+            wind_direction INTEGER,
+            humidity INTEGER,
+            pressure REAL,
+            cloud_cover INTEGER,
+            visibility INTEGER,
+            uv_index INTEGER,
+            weather_condition TEXT,
+            weather_description TEXT,
+            data_json TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(latitude, longitude, timestamp, source)
+        )
+    )";
+    
+    if (!query.exec(createHistoricalWeather)) {
+        qCritical() << "Failed to create historical_weather table:" << query.lastError().text();
+        return false;
+    }
+    
     // Create indexes
     query.exec("CREATE INDEX IF NOT EXISTS idx_alerts_location ON alerts(location_id)");
     query.exec("CREATE INDEX IF NOT EXISTS idx_alerts_enabled ON alerts(enabled)");
     query.exec("CREATE INDEX IF NOT EXISTS idx_cache_expires ON forecast_cache(expires_at)");
+    query.exec("CREATE INDEX IF NOT EXISTS idx_historical_location_time ON historical_weather(latitude, longitude, timestamp)");
+    query.exec("CREATE INDEX IF NOT EXISTS idx_historical_source_time ON historical_weather(source, timestamp)");
+    query.exec("CREATE INDEX IF NOT EXISTS idx_historical_timestamp ON historical_weather(timestamp)");
     
     return true;
 }
