@@ -18,6 +18,7 @@ Page {
     property var selectedCoordinate: defaultCoordinate
     property bool hasSelectedCoordinate: false
     property bool outsideAllowedRegion: false
+    property int mapOverlayTrim: 48
 
     function clampToAllowedRegion(lat, lon) {
         var boundedLat = Math.min(Math.max(lat, allowedRegion.south), allowedRegion.north)
@@ -130,8 +131,8 @@ Page {
             // Map Preview
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 280
-                Layout.minimumHeight: 240
+                Layout.preferredHeight: 220
+                Layout.minimumHeight: 200
                 color: "white"
                 radius: 10
                 border.color: "#e0e0e0"
@@ -140,12 +141,41 @@ Page {
 
                 Map {
                     id: locationMap
-                    anchors.fill: parent
-                    anchors.margins: 12
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    anchors.leftMargin: 12
+                    anchors.rightMargin: 12
+                    anchors.bottomMargin: 12
+                    anchors.topMargin: -mainPage.mapOverlayTrim
                     center: mainPage.selectedCoordinate
                     zoomLevel: mainPage.hasSelectedCoordinate ? 12 : 11
                     copyrightsVisible: true
-                    gesture.enabled: false
+                    minimumZoomLevel: 10
+                    maximumZoomLevel: 14
+
+                    function selectApprovedMapType() {
+                        if (!supportedMapTypes || supportedMapTypes.length === 0)
+                            return
+
+                        for (var i = 0; i < supportedMapTypes.length; ++i) {
+                            var typeName = supportedMapTypes[i].name.toLowerCase()
+                            if (typeName.indexOf("street") !== -1 ||
+                                typeName.indexOf("custom") !== -1 ||
+                                typeName.indexOf("osm") !== -1) {
+                                if (activeMapType !== supportedMapTypes[i])
+                                    activeMapType = supportedMapTypes[i]
+                                return
+                            }
+                        }
+
+                        if (activeMapType !== supportedMapTypes[0])
+                            activeMapType = supportedMapTypes[0]
+                    }
+
+                    Component.onCompleted: selectApprovedMapType()
+                    onSupportedMapTypesChanged: selectApprovedMapType()
                     plugin: Plugin {
                         name: "osm"
                         PluginParameter {
@@ -187,7 +217,9 @@ Page {
 
                 Text {
                     text: mainPage.outsideAllowedRegion
-                          ? qsTr("Location outside coverage. Showing nearest supported point.")
+                          ? qsTr("Outside coverage. Showing nearest point at %1°, %2°.")
+                                .arg(mainPage.selectedCoordinate.latitude.toFixed(3))
+                                .arg(mainPage.selectedCoordinate.longitude.toFixed(3))
                           : qsTr("Select a location within the supported coverage area.")
                     color: mainPage.outsideAllowedRegion ? "#d32f2f" : "#666"
                     font.pixelSize: 14
