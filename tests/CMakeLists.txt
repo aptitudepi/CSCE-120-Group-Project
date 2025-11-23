@@ -38,6 +38,9 @@ FetchContent_Declare(
 # Make available - this will build GTest from source with system libraries
 FetchContent_MakeAvailable(googletest)
 
+# Ensure Qt Test module is available for QSignalSpy and other test utilities
+find_package(Qt6 6.4 REQUIRED COMPONENTS Test)
+
 # Enable testing
 enable_testing()
 
@@ -61,6 +64,7 @@ target_link_libraries(HyperlocalWeatherTests PRIVATE
     Qt6::Core
     Qt6::Network
     Qt6::Sql
+    Qt6::Test
     GTest::gtest
     GTest::gtest_main
 )

@@ -41,7 +41,7 @@ TEST_F(MovingAverageFilterTest, SimpleMovingAverage) {
     for (int i = 0; i < 10; ++i) {
         WeatherData* data = new WeatherData();
         data->setTemperature(70.0 + i * 2.0); // 70, 72, 74, 76, 78, 80, 82, 84, 86, 88
-        data->setTimestamp(baseTime.addMinutes(i * 15));
+        data->setTimestamp(baseTime.addSecs(i * 15 * 60));
         filter->addDataPoint(data);
         delete data;
     }
@@ -66,7 +66,7 @@ TEST_F(MovingAverageFilterTest, ExponentialMovingAverage) {
     for (int i = 0; i < values.size(); ++i) {
         WeatherData* data = new WeatherData();
         data->setTemperature(values[i]);
-        data->setTimestamp(baseTime.addMinutes(i * 15));
+        data->setTimestamp(baseTime.addSecs(i * 15 * 60));
         filter->addDataPoint(data);
         delete data;
     }
@@ -97,14 +97,14 @@ TEST_F(MovingAverageFilterTest, WindDirectionAverage) {
     WeatherData* data2 = new WeatherData();
     data2->setWindDirection(90);  // East
     data2->setWindSpeed(10.0);
-    data2->setTimestamp(baseTime.addMinutes(15));
+    data2->setTimestamp(baseTime.addSecs(15 * 60));
     filter->addDataPoint(data2);
     delete data2;
     
     WeatherData* data3 = new WeatherData();
     data3->setWindDirection(45);  // Northeast
     data3->setWindSpeed(10.0);
-    data3->setTimestamp(baseTime.addMinutes(30));
+    data3->setTimestamp(baseTime.addSecs(30 * 60));
     filter->addDataPoint(data3);
     delete data3;
     
@@ -130,7 +130,7 @@ TEST_F(MovingAverageFilterTest, SmoothForecast) {
     for (int i = 0; i < 5; ++i) {
         WeatherData* data = new WeatherData();
         data->setTemperature(75.0 + i * 0.5 + (i % 2 == 0 ? 2.0 : -2.0)); // Oscillating pattern
-        data->setTimestamp(baseTime.addHours(i));
+        data->setTimestamp(baseTime.addSecs(i * 3600));
         forecasts.append(data);
     }
     

@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QList>
+#include <QVariant>
 #include "models/WeatherData.h"
 #include "models/ForecastModel.h"
 #include "services/NWSService.h"
@@ -55,6 +56,10 @@ public:
     Q_INVOKABLE void clearError();
     Q_INVOKABLE void setServiceProvider(int provider);
     Q_INVOKABLE void fetchNowcast(double latitude, double longitude);
+    Q_INVOKABLE void saveLocation(const QString& name, double latitude, double longitude);
+    Q_INVOKABLE QVariantList getSavedLocations();
+    Q_INVOKABLE void deleteLocation(int locationId);
+    Q_INVOKABLE void loadLocation(int locationId);
     
 signals:
     void forecastModelChanged();

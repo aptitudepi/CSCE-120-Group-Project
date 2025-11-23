@@ -97,7 +97,7 @@ TEST_F(EndToEndTest, HistoricalDataStorage) {
         WeatherData* data = new WeatherData();
         data->setLatitude(30.2672);
         data->setLongitude(-97.7431);
-        data->setTimestamp(baseTime.addHours(i));
+        data->setTimestamp(baseTime.addSecs(i * 3600));
         data->setTemperature(75.0 + i);
         data->setPrecipProbability(0.5);
         testData.append(data);

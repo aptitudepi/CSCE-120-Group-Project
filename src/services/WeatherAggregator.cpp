@@ -493,12 +493,12 @@ QList<WeatherData*> WeatherAggregator::mergeForecasts(const QList<ForecastWithSe
     
     if (timeBins.isEmpty()) {
         // Fallback: return first source's forecasts
-        return forecasts.first();
+        return forecastsWithServices.first().forecasts;
     }
     
     // Merge forecasts for each time bin
     QList<WeatherData*> mergedForecasts;
-    QDateTimeList sortedTimes = timeBins.keys();
+    QList<QDateTime> sortedTimes = timeBins.keys();
     std::sort(sortedTimes.begin(), sortedTimes.end());
     
     for (const QDateTime& binTime : sortedTimes) {

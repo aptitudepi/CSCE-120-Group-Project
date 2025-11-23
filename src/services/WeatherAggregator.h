@@ -5,6 +5,8 @@
 #include <QList>
 #include <QTimer>
 #include <QElapsedTimer>
+#include <QDateTime>
+#include <QMap>
 #include "services/WeatherService.h"
 #include "services/MovingAverageFilter.h"
 #include "models/WeatherData.h"
@@ -104,6 +106,8 @@ private:
         QDateTime lastSuccessTime;
     };
     
+    struct ForecastWithService;
+    
     void updateServiceAvailability(WeatherService* service, bool success, qint64 responseTime);
     QList<WeatherData*> mergeForecasts(const QList<ForecastWithService>& forecastsWithServices);
     WeatherData* mergeCurrentWeather(const QList<WeatherData*>& currentData);
@@ -134,11 +138,6 @@ private:
     
     // Request tracking
     QMap<QString, QList<WeatherService*>> m_pendingRequests; // cacheKey -> services
-    struct ForecastWithService {
-        QList<WeatherData*> forecasts;
-        WeatherService* service;
-        qint64 responseTime;
-    };
     QMap<QString, QList<ForecastWithService>> m_pendingForecasts; // cacheKey -> list of (forecasts, service, responseTime)
     QMap<QString, QList<WeatherData*>> m_pendingCurrentWeather; // cacheKey -> list of current weather
     QMap<QString, QList<WeatherService*>> m_receivedServices; // cacheKey -> services that have responded

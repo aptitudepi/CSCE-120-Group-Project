@@ -76,7 +76,7 @@ TEST_F(WeatherAggregatorTest, WeightedAverageMerging) {
         WeatherData* data = new WeatherData();
         data->setLatitude(30.2672);
         data->setLongitude(-97.7431);
-        data->setTimestamp(baseTime.addHours(i));
+        data->setTimestamp(baseTime.addSecs(i * 3600));
         data->setTemperature(75.0 + i);
         data->setPrecipProbability(0.5);
         data->setPrecipIntensity(0.1);
@@ -91,7 +91,7 @@ TEST_F(WeatherAggregatorTest, WeightedAverageMerging) {
         WeatherData* data = new WeatherData();
         data->setLatitude(30.2672);
         data->setLongitude(-97.7431);
-        data->setTimestamp(baseTime.addHours(i));
+        data->setTimestamp(baseTime.addSecs(i * 3600));
         data->setTemperature(76.0 + i); // Slightly warmer
         data->setPrecipProbability(0.6); // Higher probability
         data->setPrecipIntensity(0.15);
