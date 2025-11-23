@@ -39,7 +39,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(googletest)
 
 # Ensure Qt Test module is available for QSignalSpy and other test utilities
-find_package(Qt6 6.4 REQUIRED COMPONENTS Test)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Test Concurrent)
 
 # Enable testing
 enable_testing()
@@ -67,6 +67,7 @@ target_link_libraries(HyperlocalWeatherTests PRIVATE
     Qt6::Network
     Qt6::Sql
     Qt6::Test
+    Qt6::Concurrent
     GTest::gtest
     GTest::gtest_main
 )

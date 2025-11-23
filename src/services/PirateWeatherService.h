@@ -6,6 +6,7 @@
 #include <QNetworkReply>
 #include <QString>
 #include <QSet>
+#include <QtConcurrent>
 
 /**
  * @brief Pirate Weather API integration
@@ -58,7 +59,7 @@ private slots:
     void onNetworkError(QNetworkReply::NetworkError networkError);
     
 private:
-    void parseForecastResponse(const QByteArray& data, double lat, double lon);
+    void parseForecastResponse(const QByteArray& data, double lat, double lon, bool hasMinuteReceivers);
     QList<WeatherData*> parseHourlyData(const QJsonArray& hourly, double lat, double lon);
     QList<WeatherData*> parseMinutelyData(const QJsonArray& minutely, double lat, double lon);
     WeatherData* parseDataPoint(const QJsonObject& point, double lat, double lon);

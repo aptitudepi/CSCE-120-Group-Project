@@ -51,7 +51,7 @@ void PirateWeatherService::fetchForecast(double latitude, double longitude) {
     request.setHeader(QNetworkRequest::UserAgentHeader, "HyperlocalWeather/1.0");
     request.setRawHeader("Accept", "application/json");
     
-    abortActiveRequests();
+    // abortActiveRequests(); // REMOVED: Do not abort concurrent requests for grid processing
     
     QNetworkReply* reply = m_networkManager->get(request);
     if (!reply) {
@@ -92,7 +92,14 @@ void PirateWeatherService::onForecastReplyFinished() {
     double lon = reply->property("longitude").toDouble();
     
     QByteArray data = reply->readAll();
-    parseForecastResponse(data, lat, lon);
+    
+    // Check receivers in main thread
+    const bool hasMinuteReceivers = receivers(SIGNAL(minuteForecastReady(QList<WeatherData*>))) > 0;
+    
+    // Offload parsing to background thread
+    (void)QtConcurrent::run([this, data, lat, lon, hasMinuteReceivers]() {
+        parseForecastResponse(data, lat, lon, hasMinuteReceivers);
+    });
     
     reply->deleteLater();
 }
@@ -107,7 +114,7 @@ void PirateWeatherService::onNetworkError(QNetworkReply::NetworkError networkErr
     }
 }
 
-void PirateWeatherService::parseForecastResponse(const QByteArray& data, double lat, double lon) {
+void PirateWeatherService::parseForecastResponse(const QByteArray& data, double lat, double lon, bool hasMinuteReceivers) {
     QJsonParseError parseError;
     QJsonDocument doc = QJsonDocument::fromJson(data, &parseError);
     if (doc.isNull() || !doc.isObject()) {
@@ -133,7 +140,7 @@ void PirateWeatherService::parseForecastResponse(const QByteArray& data, double 
     }
     
     // Parse minutely forecast for nowcasting
-    const bool hasMinuteReceivers = receivers(SIGNAL(minuteForecastReady(QList<WeatherData*>))) > 0;
+    // const bool hasMinuteReceivers = receivers(SIGNAL(minuteForecastReady(QList<WeatherData*>))) > 0; // Moved to main thread
     
     if (hasMinuteReceivers && obj.contains("minutely") && obj["minutely"].isObject()) {
         QJsonObject minutely = obj["minutely"].toObject();

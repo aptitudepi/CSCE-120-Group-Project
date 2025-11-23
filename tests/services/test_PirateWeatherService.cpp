@@ -21,8 +21,8 @@ protected:
     
     PirateWeatherService* service;
     
-    void testParseForecastResponse(const QByteArray& data, double lat, double lon) {
-        service->parseForecastResponse(data, lat, lon);
+    void testParseForecastResponse(const QByteArray& data, double lat, double lon, bool hasMinuteReceivers = false) {
+        service->parseForecastResponse(data, lat, lon, hasMinuteReceivers);
     }
 };
 

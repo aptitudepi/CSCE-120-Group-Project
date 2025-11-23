@@ -14,7 +14,7 @@ WeatherAggregator::WeatherAggregator(QObject *parent)
     , m_timeoutTimer(new QTimer(this))
     , m_movingAverageFilter(new MovingAverageFilter(this))
     , m_movingAverageEnabled(false)
-    , m_defaultTimeoutMs(10000)
+    , m_defaultTimeoutMs(15000)
     , m_spatioTimeoutMs(30000)
     , m_totalRequests(0)
     , m_successfulRequests(0)
@@ -55,7 +55,7 @@ WeatherAggregator::WeatherAggregator(QObject *parent)
     m_spatioTemporalEngine->setGridConfig(gridConfig);
 
     m_defaultTimeoutMs = qMax(1000, envInt("HLW_TIMEOUT_MS", m_defaultTimeoutMs));
-    int defaultSpatioTimeout = qMax(gridConfig.pointCount * 4000, m_defaultTimeoutMs * 2);
+    int defaultSpatioTimeout = qMax(gridConfig.pointCount * 6000, m_defaultTimeoutMs * 2);
     m_spatioTimeoutMs = qMax(defaultSpatioTimeout, envInt("HLW_SPATIOTEMPORAL_TIMEOUT_MS", defaultSpatioTimeout));
     m_timeoutTimer->setInterval(m_defaultTimeoutMs);
 
@@ -115,6 +115,7 @@ void WeatherAggregator::addService(WeatherService* service, int priority) {
     entry.lastResponseTime = 0;
     entry.successCount = 0;
     entry.failureCount = 0;
+    entry.consecutiveFailures = 0;
     
     m_services.append(entry);
     
@@ -468,10 +469,17 @@ void WeatherAggregator::updateServiceAvailability(WeatherService* service, bool 
             if (success) {
                 entry.lastResponseTime = responseTime;
                 entry.successCount++;
+                entry.consecutiveFailures = 0;
                 entry.lastSuccessTime = QDateTime::currentDateTime();
             } else {
                 entry.failureCount++;
+                entry.consecutiveFailures++;
                 m_lastFailureTime[service] = QDateTime::currentDateTime();
+                
+                if (entry.consecutiveFailures >= 10) {
+                    qWarning() << "Service" << service->serviceName() << "failed" << entry.consecutiveFailures << "times consecutively. Triggering fallback.";
+                    emit error(QString("Service %1 failed %2 times consecutively").arg(service->serviceName()).arg(entry.consecutiveFailures));
+                }
             }
             break;
         }

@@ -161,21 +161,24 @@ void WeatherbitService::onReplyFinished()
         return;
     }
 
-    if (type == ForecastReply) {
-        QList<WeatherData*> forecasts = parseForecastPayload(payload, lat, lon);
-        if (forecasts.isEmpty()) {
-            emit error("Weatherbit forecast response did not include data");
+    // Offload parsing to background thread
+    (void)QtConcurrent::run([this, payload, type, lat, lon]() {
+        if (type == ForecastReply) {
+            QList<WeatherData*> forecasts = parseForecastPayload(payload, lat, lon);
+            if (forecasts.isEmpty()) {
+                emit error("Weatherbit forecast response did not include data");
+            } else {
+                emit forecastReady(forecasts);
+            }
         } else {
-            emit forecastReady(forecasts);
+            WeatherData* current = parseCurrentPayload(payload, lat, lon);
+            if (!current) {
+                emit error("Weatherbit current response did not include data");
+            } else {
+                emit currentReady(current);
+            }
         }
-    } else {
-        WeatherData* current = parseCurrentPayload(payload, lat, lon);
-        if (!current) {
-            emit error("Weatherbit current response did not include data");
-        } else {
-            emit currentReady(current);
-        }
-    }
+    });
 
     reply->deleteLater();
 }

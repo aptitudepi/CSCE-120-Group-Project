@@ -15,6 +15,8 @@ find_package(Qt6 6.4 REQUIRED COMPONENTS
     Network
     Sql
     Positioning
+    Location
+    Concurrent
 )
 
 # Set Qt policies to use standard QML module paths
@@ -113,6 +115,8 @@ target_link_libraries(HyperlocalWeather PRIVATE
     Qt6::Network
     Qt6::Sql
     Qt6::Positioning
+    Qt6::Location
+    Qt6::Concurrent
 )
 
 # Set target properties

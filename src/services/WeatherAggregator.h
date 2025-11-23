@@ -108,6 +108,7 @@ private:
         qint64 lastResponseTime;
         int successCount;
         int failureCount;
+        int consecutiveFailures;
         QDateTime lastSuccessTime;
     };
     

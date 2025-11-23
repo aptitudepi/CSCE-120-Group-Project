@@ -99,8 +99,14 @@ WeatherController::WeatherController(QObject *parent)
     connect(m_performanceMonitor, &PerformanceMonitor::metricsUpdated,
             this, &WeatherController::performanceMonitorChanged);
 
-    // Default to aggregated mode with spatio-temporal smoothing
-    setUseAggregation(true);
+    // Default to aggregated mode only if API keys are available
+    if (m_pirateService->hasApiKey() || m_weatherbitService->hasApiKey()) {
+        setUseAggregation(true);
+    } else {
+        qInfo() << "No third-party API keys found. Defaulting to NWS only.";
+        setUseAggregation(false);
+        setServiceProvider(NWS);
+    }
 }
 
 WeatherController::~WeatherController() {
@@ -310,8 +316,22 @@ void WeatherController::onAggregatorForecastReady(QList<WeatherData*> data) {
 }
 
 void WeatherController::onAggregatorError(QString error) {
-    onServiceError(error);
+    qWarning() << "Aggregator error:" << error << "- Falling back to NWS";
     m_performanceMonitor->recordServiceDown("Aggregated");
+
+    // Fallback to NWS only if we were using aggregation
+    if (m_useAggregation) {
+        setUseAggregation(false);
+        setServiceProvider(NWS);
+        
+        // Retry with NWS
+        if (m_lastLat != 0.0 || m_lastLon != 0.0) {
+            fetchForecast(m_lastLat, m_lastLon);
+        }
+    } else {
+        // Already on NWS or other provider, just report error
+        onServiceError(error);
+    }
 }
 
 void WeatherController::onCurrentReady(WeatherData* data) {

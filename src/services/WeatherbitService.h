@@ -6,6 +6,7 @@
 #include <QNetworkReply>
 #include <QSet>
 #include <QJsonObject>
+#include <QtConcurrent>
 
 /**
  * @brief Fetches forecast and current weather data from the Weatherbit API.
