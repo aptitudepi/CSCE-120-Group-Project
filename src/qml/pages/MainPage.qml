@@ -5,8 +5,6 @@ import HyperlocalWeather 1.0
 
 Page {
     id: mainPage
-    
-    signal settingsRequested()
 
     background: Rectangle {
         color: "#f0f0f0"
@@ -41,67 +39,42 @@ Page {
 
                 Item { Layout.fillWidth: true }
 
-                ComboBox {
-                    id: serviceSelector
-                    Layout.preferredWidth: 180
-                    model: ["NWS", "PirateWeather", "Aggregated"]
-                    currentIndex: {
-                        var provider = weatherController.serviceProvider
-                        if (provider === "NWS") return 0
-                        if (provider === "PirateWeather") return 1
-                        if (provider === "Aggregated") return 2
-                        return 0
-                    }
-                    enabled: !weatherController.loading
-                    
-                    onCurrentIndexChanged: {
-                        weatherController.setServiceProvider(currentIndex)
-                    }
-                    
-                    Connections {
-                        target: weatherController
-                        function onServiceProviderChanged() {
-                            var provider = weatherController.serviceProvider
-                            if (provider === "NWS") serviceSelector.currentIndex = 0
-                            else if (provider === "PirateWeather") serviceSelector.currentIndex = 1
-                            else if (provider === "Aggregated") serviceSelector.currentIndex = 2
-                        }
-                    }
-                }
-
                 Button {
                     text: qsTr("Refresh")
                     onClicked: weatherController.refreshForecast()
                     enabled: !weatherController.loading
                 }
-                
-                Button {
-                    text: qsTr("Settings")
-                    onClicked: mainPage.settingsRequested()
-                }
             }
         }
 
-        // Service Info
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 40
-            color: "white"
-            radius: 5
-            border.color: "#e0e0e0"
+            Layout.bottomMargin: 10
+            color: "#e3f2fd"
+            radius: 6
+            border.color: "#bbdefb"
             border.width: 1
-            
-            RowLayout {
+
+            ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: 10
-                
+                anchors.margins: 12
+                spacing: 4
+
                 Text {
-                    text: qsTr("Service: %1").arg(weatherController.serviceProvider)
-                    font.pixelSize: 14
-                    color: "#666"
+                    text: qsTr("Interpolated Forecast")
+                    font.pixelSize: 18
+                    font.bold: true
+                    color: "#0d47a1"
                 }
-                
-                Item { Layout.fillWidth: true }
+
+                Text {
+                    Layout.fillWidth: true
+                    text: qsTr("Combines NWS and Pirate Weather data using a 1 km spatial grid (center + 6 offsets) "
+                               + "and one-minute temporal interpolation between now and each provider's next forecast.")
+                    wrapMode: Text.WordWrap
+                    font.pixelSize: 13
+                    color: "#0d47a1"
+                }
             }
         }
 
@@ -109,7 +82,7 @@ Page {
         LocationInput {
             id: locationInput
             Layout.fillWidth: true
-            Layout.preferredHeight: 120
+            Layout.topMargin: 10
             onLocationSelected: function(lat, lon) {
                 weatherController.fetchForecast(lat, lon)
             }

@@ -19,6 +19,8 @@ find_package(Qt6 6.4 REQUIRED COMPONENTS
 
 # Set Qt policies to use standard QML module paths
 qt_policy(SET QTP0001 NEW)
+qt_policy(SET QTP0004 NEW)
+qt_standard_project_setup()
 
 # Provide helpful error message if Qt6 not found
 if(NOT Qt6_FOUND)
@@ -41,6 +43,7 @@ set(SOURCES
     src/services/WeatherService.cpp
     src/services/NWSService.cpp
     src/services/PirateWeatherService.cpp
+    src/services/WeatherbitService.cpp
     src/services/CacheManager.cpp
     src/services/WeatherAggregator.cpp
     src/services/PerformanceMonitor.cpp
@@ -50,6 +53,10 @@ set(SOURCES
     src/controllers/AlertController.cpp
     src/database/DatabaseManager.cpp
     src/nowcast/NowcastEngine.cpp
+    src/nowcast/SpatialInterpolator.cpp
+    src/nowcast/TemporalInterpolator.cpp
+    src/nowcast/SpatioTemporalEngine.cpp
+    src/utils/EnvLoader.cpp
 )
 
 set(HEADERS
@@ -59,6 +66,7 @@ set(HEADERS
     src/services/WeatherService.h
     src/services/NWSService.h
     src/services/PirateWeatherService.h
+    src/services/WeatherbitService.h
     src/services/CacheManager.h
     src/services/WeatherAggregator.h
     src/services/PerformanceMonitor.h
@@ -68,6 +76,10 @@ set(HEADERS
     src/controllers/AlertController.h
     src/database/DatabaseManager.h
     src/nowcast/NowcastEngine.h
+    src/nowcast/SpatialInterpolator.h
+    src/nowcast/TemporalInterpolator.h
+    src/nowcast/SpatioTemporalEngine.h
+    src/utils/EnvLoader.h
 )
 
 # Create executable first
@@ -76,15 +88,18 @@ qt6_add_executable(HyperlocalWeather
     ${HEADERS}
 )
 
+# Ensure the main QML entry point is available at the module root
+set_source_files_properties(src/qml/main.qml PROPERTIES QT_RESOURCE_ALIAS "main.qml")
+
 # Create QML module for proper type resolution
 # Note: Executable output is set to bin/ directory to avoid conflicts
 qt6_add_qml_module(HyperlocalWeather
     URI HyperlocalWeather
     VERSION 1.0
+    RESOURCE_PREFIX "/qt/qml"
     QML_FILES
         src/qml/main.qml
         src/qml/pages/MainPage.qml
-        src/qml/pages/SettingsPage.qml
         src/qml/components/ForecastCard.qml
         src/qml/components/LocationInput.qml
         src/qml/components/AlertItem.qml

@@ -8,6 +8,7 @@
 #include "models/ForecastModel.h"
 #include "services/NWSService.h"
 #include "services/PirateWeatherService.h"
+#include "services/WeatherbitService.h"
 #include "services/CacheManager.h"
 #include "services/WeatherAggregator.h"
 #include "services/PerformanceMonitor.h"
@@ -35,7 +36,8 @@ public:
     enum ServiceProvider {
         NWS = 0,
         PirateWeather = 1,
-        Aggregated = 2
+        Aggregated = 2,
+        Weatherbit = 3
     };
     Q_ENUM(ServiceProvider)
     
@@ -85,11 +87,14 @@ private:
     QString generateCacheKey(double lat, double lon) const;
     QList<WeatherData*> loadFromCache(const QString& key);
     void saveToCache(const QString& key, const QList<WeatherData*>& data);
+    bool isValidCoordinate(double latitude, double longitude) const;
+    bool shouldProcessServiceResponse(QObject* sender, bool& callerOwnsData) const;
     
     ForecastModel* m_forecastModel;
     WeatherData* m_current;
     NWSService* m_nwsService;
     PirateWeatherService* m_pirateService;
+    WeatherbitService* m_weatherbitService;
     CacheManager* m_cache;
     WeatherAggregator* m_aggregator;
     PerformanceMonitor* m_performanceMonitor;

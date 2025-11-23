@@ -2,6 +2,7 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Controls.Material 2.15
+import QtPositioning 6.0
 import HyperlocalWeather 1.0
 
 Rectangle {
@@ -10,10 +11,42 @@ Rectangle {
     radius: 10
     border.color: "#e0e0e0"
     border.width: 1
+    implicitHeight: contentLayout.implicitHeight + 30
 
     signal locationSelected(double latitude, double longitude)
 
+    PositionSource {
+        id: positionSource
+        active: false
+        updateInterval: 10000
+        preferredPositioningMethods: PositionSource.AllPositioningMethods
+        
+        onPositionChanged: {
+            var coord = positionSource.position.coordinate;
+            if (!coord || !coord.isValid || !isFinite(coord.latitude) || !isFinite(coord.longitude)) {
+                console.warn("GPS returned invalid coordinate", coord);
+                active = false;
+                return;
+            }
+            var roundedLat = Number(coord.latitude.toFixed(4));
+            var roundedLon = Number(coord.longitude.toFixed(4));
+            console.log("GPS Position received:", roundedLat, roundedLon);
+            locationSelected(roundedLat, roundedLon);
+            latField.text = roundedLat.toFixed(4);
+            lonField.text = roundedLon.toFixed(4);
+            active = false; // Stop after getting position
+        }
+        
+        onSourceErrorChanged: {
+            if (sourceError != PositionSource.NoError) {
+                console.log("GPS Error:", sourceError);
+                active = false;
+            }
+        }
+    }
+
     ColumnLayout {
+        id: contentLayout
         anchors.fill: parent
         anchors.margins: 15
         spacing: 10
@@ -60,11 +93,12 @@ Rectangle {
             }
 
             Button {
-                text: qsTr("Use GPS")
+                text: positionSource.active ? qsTr("Locating...") : qsTr("Use GPS")
+                enabled: !positionSource.active
                 onClicked: {
-                    // TODO: Implement GPS location
-                    // For now, use a default location (College Station, TX)
-                    locationSelected(30.6272, -96.3344)
+                    console.log("Starting GPS location...")
+                    positionSource.active = true
+                    positionSource.update()
                 }
             }
         }
@@ -79,4 +113,3 @@ Rectangle {
         }
     }
 }
-

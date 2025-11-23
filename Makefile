@@ -210,8 +210,8 @@ coverage: build-coverage ## Generate code coverage report
 		$(CTEST) --output-on-failure && \
 		$(NINJA) coverage 2>/dev/null || \
 		(echo "$(COLOR_YELLOW)Coverage target not available, generating manually...$(COLOR_RESET)" && \
-		 lcov --capture --directory . --output-file coverage.info && \
-		 lcov --remove coverage.info '/usr/*' '*/tests/*' '*/build/*' --output-file coverage.info && \
+		 lcov --capture --directory . --output-file coverage.info --ignore-errors mismatch && \
+		 lcov --remove coverage.info '/usr/*' '*/tests/*' '*/build/*' --output-file coverage.info --ignore-errors unused && \
 		 genhtml coverage.info --output-directory coverage)
 	@echo "$(COLOR_GREEN)✓ Coverage report generated: $(BUILD_DIR_COVERAGE)/coverage/index.html$(COLOR_RESET)"
 	@echo "$(COLOR_BLUE)Open with: xdg-open $(BUILD_DIR_COVERAGE)/coverage/index.html$(COLOR_RESET)"
@@ -392,8 +392,8 @@ ci-coverage: build-coverage ## CI coverage target
 		export QT_QPA_PLATFORM=offscreen && \
 		$(CTEST) --output-on-failure && \
 		$(NINJA) coverage 2>/dev/null || \
-		(lcov --capture --directory . --output-file coverage.info && \
-		 lcov --remove coverage.info '/usr/*' '*/tests/*' '*/build/*' --output-file coverage.info)
+		(lcov --capture --directory . --output-file coverage.info --ignore-errors mismatch && \
+		 lcov --remove coverage.info '/usr/*' '*/tests/*' '*/build/*' --output-file coverage.info --ignore-errors unused)
 
 ci: ci-build ci-test ## Run full CI pipeline
 

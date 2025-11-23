@@ -61,10 +61,10 @@ private:
     };
     
     void parsePointsResponse(const QByteArray& data, double lat, double lon);
-    void parseForecastResponse(const QByteArray& data);
-    void parseHourlyForecastResponse(const QByteArray& data);
+    void parseForecastResponse(const QByteArray& data, double lat, double lon);
+    void parseHourlyForecastResponse(const QByteArray& data, double lat, double lon);
     void parseAlertsResponse(const QByteArray& data);
-    QList<WeatherData*> parsePeriods(const QJsonArray& periods);
+    QList<WeatherData*> parsePeriods(const QJsonArray& periods, double lat, double lon);
     WeatherData* parsePeriod(const QJsonObject& period, double lat, double lon);
     
     QNetworkAccessManager* m_networkManager;

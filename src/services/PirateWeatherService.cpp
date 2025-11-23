@@ -10,6 +10,8 @@
 #include <QProcessEnvironment>
 #include <QList>
 #include <QVariant>
+#include <QJsonParseError>
+#include <QtGlobal>
 
 const QString PirateWeatherService::BASE_URL = "https://api.pirateweather.net/forecast";
 
@@ -22,22 +24,18 @@ PirateWeatherService::PirateWeatherService(QObject *parent)
     if (env.contains("PIRATE_WEATHER_API_KEY")) {
         m_apiKey = env.value("PIRATE_WEATHER_API_KEY");
     }
-    
-    connect(m_networkManager, &QNetworkAccessManager::finished,
-            this, [this](QNetworkReply* reply) {
-        if (reply->error() != QNetworkReply::NoError) {
-            qWarning() << "Network error:" << reply->errorString();
-            emit error(reply->errorString());
-            reply->deleteLater();
-            return;
-        }
-    });
 }
 
-PirateWeatherService::~PirateWeatherService() = default;
+PirateWeatherService::~PirateWeatherService() {
+    abortActiveRequests();
+}
 
 void PirateWeatherService::setApiKey(const QString& apiKey) {
     m_apiKey = apiKey;
+}
+
+void PirateWeatherService::cancelActiveRequests() {
+    abortActiveRequests();
 }
 
 void PirateWeatherService::fetchForecast(double latitude, double longitude) {
@@ -53,8 +51,21 @@ void PirateWeatherService::fetchForecast(double latitude, double longitude) {
     request.setHeader(QNetworkRequest::UserAgentHeader, "HyperlocalWeather/1.0");
     request.setRawHeader("Accept", "application/json");
     
+    abortActiveRequests();
+    
     QNetworkReply* reply = m_networkManager->get(request);
-    connect(reply, &QNetworkReply::finished, this, &PirateWeatherService::onForecastReplyFinished);
+    if (!reply) {
+        emit error("Failed to start Pirate Weather request");
+        return;
+    }
+    
+    reply->setParent(this);
+    m_activeReplies.insert(reply);
+    
+    connect(reply, &QNetworkReply::finished,
+            this, &PirateWeatherService::onForecastReplyFinished);
+    connect(reply, &QNetworkReply::errorOccurred,
+            this, &PirateWeatherService::onNetworkError);
     reply->setProperty("latitude", latitude);
     reply->setProperty("longitude", longitude);
 }
@@ -70,15 +81,15 @@ void PirateWeatherService::onForecastReplyFinished() {
         return;
     }
     
-    double lat = reply->property("latitude").toDouble();
-    double lon = reply->property("longitude").toDouble();
+    unregisterReply(reply);
     
     if (reply->error() != QNetworkReply::NoError) {
-        qWarning() << "Pirate Weather request error:" << reply->errorString();
-        emit error(reply->errorString());
         reply->deleteLater();
         return;
     }
+    
+    double lat = reply->property("latitude").toDouble();
+    double lon = reply->property("longitude").toDouble();
     
     QByteArray data = reply->readAll();
     parseForecastResponse(data, lat, lon);
@@ -90,14 +101,21 @@ void PirateWeatherService::onNetworkError(QNetworkReply::NetworkError networkErr
     Q_UNUSED(networkError)
     QNetworkReply* reply = qobject_cast<QNetworkReply*>(sender());
     if (reply) {
+        unregisterReply(reply);
         emit error(reply->errorString());
+        reply->deleteLater();
     }
 }
 
 void PirateWeatherService::parseForecastResponse(const QByteArray& data, double lat, double lon) {
-    QJsonDocument doc = QJsonDocument::fromJson(data);
+    QJsonParseError parseError;
+    QJsonDocument doc = QJsonDocument::fromJson(data, &parseError);
     if (doc.isNull() || !doc.isObject()) {
-        emit error("Invalid forecast response");
+        QString message = "Invalid forecast response";
+        if (parseError.error != QJsonParseError::NoError) {
+            message += QString(": %1").arg(parseError.errorString());
+        }
+        emit error(message);
         return;
     }
     
@@ -115,7 +133,9 @@ void PirateWeatherService::parseForecastResponse(const QByteArray& data, double 
     }
     
     // Parse minutely forecast for nowcasting
-    if (obj.contains("minutely") && obj["minutely"].isObject()) {
+    const bool hasMinuteReceivers = receivers(SIGNAL(minuteForecastReady(QList<WeatherData*>))) > 0;
+    
+    if (hasMinuteReceivers && obj.contains("minutely") && obj["minutely"].isObject()) {
         QJsonObject minutely = obj["minutely"].toObject();
         if (minutely.contains("data") && minutely["data"].isArray()) {
             QList<WeatherData*> minutelyData = parseMinutelyData(minutely["data"].toArray(), lat, lon);
@@ -238,5 +258,32 @@ WeatherData* PirateWeatherService::parseDataPoint(const QJsonObject& point, doub
     }
     
     return data;
+}
+
+void PirateWeatherService::abortActiveRequests() {
+    if (m_activeReplies.isEmpty()) {
+        return;
+    }
+    
+    const auto replies = m_activeReplies;
+    for (QNetworkReply* reply : replies) {
+        if (!reply) {
+            continue;
+        }
+        reply->disconnect(this);
+        reply->abort();
+        reply->deleteLater();
+    }
+    m_activeReplies.clear();
+}
+
+void PirateWeatherService::unregisterReply(QNetworkReply* reply) {
+    if (!reply) {
+        return;
+    }
+    if (m_activeReplies.contains(reply)) {
+        reply->disconnect(this);
+        m_activeReplies.remove(reply);
+    }
 }
 

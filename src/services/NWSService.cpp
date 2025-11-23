@@ -158,8 +158,10 @@ void NWSService::onForecastReplyFinished() {
         m_lastModifiedCache[QString("forecast_%1").arg(cacheKey)] = lastModified.toDateTime();
     }
     
+    double lat = reply->property("latitude").toDouble();
+    double lon = reply->property("longitude").toDouble();
     QByteArray data = reply->readAll();
-    parseForecastResponse(data);
+    parseForecastResponse(data, lat, lon);
     
     reply->deleteLater();
 }
@@ -177,8 +179,10 @@ void NWSService::onHourlyReplyFinished() {
         return;
     }
     
+    double lat = reply->property("latitude").toDouble();
+    double lon = reply->property("longitude").toDouble();
     QByteArray data = reply->readAll();
-    parseHourlyForecastResponse(data);
+    parseHourlyForecastResponse(data, lat, lon);
     
     reply->deleteLater();
 }
@@ -264,7 +268,7 @@ void NWSService::parsePointsResponse(const QByteArray& data, double lat, double 
     emit gridpointReady(office, x, y);
 }
 
-void NWSService::parseForecastResponse(const QByteArray& data) {
+void NWSService::parseForecastResponse(const QByteArray& data, double lat, double lon) {
     QJsonDocument doc = QJsonDocument::fromJson(data);
     if (doc.isNull() || !doc.isObject()) {
         emit error("Invalid forecast response");
@@ -275,11 +279,7 @@ void NWSService::parseForecastResponse(const QByteArray& data) {
     QJsonObject props = obj["properties"].toObject();
     QJsonArray periods = props["periods"].toArray();
     
-    // Get coordinates from gridpoint (we'll use a default for now)
-    double lat = 0.0;
-    double lon = 0.0;
-    
-    QList<WeatherData*> forecasts = parsePeriods(periods);
+    QList<WeatherData*> forecasts = parsePeriods(periods, lat, lon);
     
     // Set coordinates for all forecasts
     for (WeatherData* forecast : forecasts) {
@@ -290,7 +290,7 @@ void NWSService::parseForecastResponse(const QByteArray& data) {
     emit forecastReady(forecasts);
 }
 
-void NWSService::parseHourlyForecastResponse(const QByteArray& data) {
+void NWSService::parseHourlyForecastResponse(const QByteArray& data, double lat, double lon) {
     QJsonDocument doc = QJsonDocument::fromJson(data);
     if (doc.isNull() || !doc.isObject()) {
         emit error("Invalid hourly forecast response");
@@ -301,10 +301,7 @@ void NWSService::parseHourlyForecastResponse(const QByteArray& data) {
     QJsonObject props = obj["properties"].toObject();
     QJsonArray periods = props["periods"].toArray();
     
-    double lat = 0.0;
-    double lon = 0.0;
-    
-    QList<WeatherData*> forecasts = parsePeriods(periods);
+    QList<WeatherData*> forecasts = parsePeriods(periods, lat, lon);
     for (WeatherData* forecast : forecasts) {
         forecast->setLatitude(lat);
         forecast->setLongitude(lon);
@@ -331,12 +328,12 @@ void NWSService::parseAlertsResponse(const QByteArray& data) {
     emit alertsReady(alerts);
 }
 
-QList<WeatherData*> NWSService::parsePeriods(const QJsonArray& periods) {
+QList<WeatherData*> NWSService::parsePeriods(const QJsonArray& periods, double lat, double lon) {
     QList<WeatherData*> forecasts;
     
     for (const QJsonValue& value : periods) {
         QJsonObject period = value.toObject();
-        WeatherData* forecast = parsePeriod(period, 0.0, 0.0);
+        WeatherData* forecast = parsePeriod(period, lat, lon);
         if (forecast) {
             forecasts.append(forecast);
         }

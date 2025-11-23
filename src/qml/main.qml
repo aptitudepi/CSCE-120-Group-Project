@@ -20,19 +20,7 @@ ApplicationWindow {
         
         Component {
             id: mainPage
-            MainPage {
-                onSettingsRequested: {
-                    var page = settingsPage.createObject(stackView)
-                    page.parentStackView = stackView
-                    stackView.push(page)
-                }
-            }
-        }
-        
-        Component {
-            id: settingsPage
-            SettingsPage {
-            }
+            MainPage { }
         }
     }
 

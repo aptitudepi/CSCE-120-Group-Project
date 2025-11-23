@@ -13,6 +13,9 @@
 #include <QElapsedTimer>
 #include <QVariantMap>
 #include <QVariantList>
+#include "utils/EnvLoader.h"
+#include <QProcessEnvironment>
+#include <cmath>
 
 WeatherController::WeatherController(QObject *parent)
     : QObject(parent)
@@ -20,6 +23,7 @@ WeatherController::WeatherController(QObject *parent)
     , m_current(nullptr)
     , m_nwsService(new NWSService(this))
     , m_pirateService(new PirateWeatherService(this))
+    , m_weatherbitService(new WeatherbitService(this))
     , m_cache(new CacheManager(50, this))
     , m_aggregator(new WeatherAggregator(this))
     , m_performanceMonitor(new PerformanceMonitor(this))
@@ -31,14 +35,29 @@ WeatherController::WeatherController(QObject *parent)
     , m_serviceProvider(NWS)
     , m_useAggregation(false)
 {
-    // Set Pirate Weather API key
-    m_pirateService->setApiKey("WsdojoTv0GEHU60N9mwRXuXoXc9tOama");
+    EnvLoader::loadFromFile();
+
+    // Set Pirate Weather API key from environment (overrides service default)
+    QString pirateKey = qEnvironmentVariable("PIRATE_WEATHER_API_KEY");
+    if (!pirateKey.isEmpty()) {
+        m_pirateService->setApiKey(pirateKey);
+    } else if (!m_pirateService->hasApiKey()) {
+        qWarning() << "PIRATE_WEATHER_API_KEY is not set. Pirate Weather requests will fail.";
+    }
+
+    QString weatherbitKey = qEnvironmentVariable("WEATHERBIT_API_KEY");
+    if (!weatherbitKey.isEmpty()) {
+        m_weatherbitService->setApiKey(weatherbitKey);
+    } else if (!m_weatherbitService->hasApiKey()) {
+        qWarning() << "WEATHERBIT_API_KEY is not set. Weatherbit requests will be skipped.";
+    }
     
     // Initialize historical data manager
     m_historicalManager->initialize();
     
     // Setup aggregator with services
     m_aggregator->addService(m_nwsService, 10); // Higher priority for NWS
+    m_aggregator->addService(m_weatherbitService, 7);
     m_aggregator->addService(m_pirateService, 5);
     m_aggregator->setStrategy(WeatherAggregator::WeightedAverage); // Use weighted average strategy
     m_aggregator->setMovingAverageEnabled(true); // Enable moving average smoothing
@@ -59,6 +78,14 @@ WeatherController::WeatherController(QObject *parent)
             this, &WeatherController::onCurrentReady);
     connect(m_pirateService, &PirateWeatherService::error,
             this, &WeatherController::onServiceError);
+
+    // Connect Weatherbit service
+    connect(m_weatherbitService, &WeatherbitService::forecastReady,
+            this, &WeatherController::onForecastReady);
+    connect(m_weatherbitService, &WeatherbitService::currentReady,
+            this, &WeatherController::onCurrentReady);
+    connect(m_weatherbitService, &WeatherbitService::error,
+            this, &WeatherController::onServiceError);
     
     // Connect aggregator
     connect(m_aggregator, &WeatherAggregator::forecastReady,
@@ -71,6 +98,9 @@ WeatherController::WeatherController(QObject *parent)
     // Connect performance monitor
     connect(m_performanceMonitor, &PerformanceMonitor::metricsUpdated,
             this, &WeatherController::performanceMonitorChanged);
+
+    // Default to aggregated mode with spatio-temporal smoothing
+    setUseAggregation(true);
 }
 
 WeatherController::~WeatherController() {
@@ -85,6 +115,8 @@ QString WeatherController::serviceProvider() const {
             return "PirateWeather";
         case Aggregated:
             return "Aggregated";
+        case Weatherbit:
+            return "Weatherbit";
         default:
             return "NWS";
     }
@@ -106,6 +138,9 @@ void WeatherController::setUseAggregation(bool use) {
 void WeatherController::setServiceProvider(int provider) {
     ServiceProvider newProvider = static_cast<ServiceProvider>(provider);
     if (newProvider != m_serviceProvider) {
+        if (m_aggregator) {
+            m_aggregator->cancelSpatioTemporalRequests();
+        }
         m_serviceProvider = newProvider;
         emit serviceProviderChanged();
         qInfo() << "Service provider changed to:" << serviceProvider();
@@ -113,6 +148,12 @@ void WeatherController::setServiceProvider(int provider) {
 }
 
 void WeatherController::fetchForecast(double latitude, double longitude) {
+    if (!isValidCoordinate(latitude, longitude)) {
+        qWarning() << "Rejected invalid coordinates" << latitude << longitude;
+        setErrorMessage("Invalid GPS coordinates");
+        return;
+    }
+    
     qInfo() << "Fetching forecast for" << latitude << longitude << "using" << serviceProvider();
     
     m_lastLat = latitude;
@@ -150,10 +191,20 @@ void WeatherController::fetchForecast(double latitude, double longitude) {
             break;
         case PirateWeather:
             if (m_pirateService->isAvailable()) {
+                m_pirateService->cancelActiveRequests();
                 qDebug() << "Cache miss - fetching from Pirate Weather API";
                 m_pirateService->fetchForecast(latitude, longitude);
             } else {
                 setErrorMessage("Pirate Weather API key not available");
+                setLoading(false);
+            }
+            break;
+        case Weatherbit:
+            if (m_weatherbitService->isAvailable()) {
+                qDebug() << "Cache miss - fetching from Weatherbit API";
+                m_weatherbitService->fetchForecast(latitude, longitude);
+            } else {
+                setErrorMessage("Weatherbit API key not available");
                 setLoading(false);
             }
             break;
@@ -184,6 +235,15 @@ void WeatherController::clearError() {
 }
 
 void WeatherController::onForecastReady(QList<WeatherData*> data) {
+    bool callerOwnsData = true;
+    if (!shouldProcessServiceResponse(sender(), callerOwnsData)) {
+        qDebug() << "Ignoring forecast from inactive source";
+        if (callerOwnsData) {
+            qDeleteAll(data);
+        }
+        return;
+    }
+
     qInfo() << "Received" << data.size() << "forecast periods";
     
     if (data.isEmpty()) {
@@ -219,6 +279,9 @@ void WeatherController::onForecastReady(QList<WeatherData*> data) {
     }
     
     // Clear current before clearing model to avoid dangling pointer
+    if (m_current && m_current->parent() == this) {
+        m_current->deleteLater();
+    }
     m_current = nullptr;
     emit currentChanged();
     
@@ -252,6 +315,14 @@ void WeatherController::onAggregatorError(QString error) {
 }
 
 void WeatherController::onCurrentReady(WeatherData* data) {
+    bool callerOwns = true;
+    if (!shouldProcessServiceResponse(sender(), callerOwns)) {
+        qDebug() << "Ignoring current weather from inactive source";
+        if (callerOwns) {
+            delete data;
+        }
+        return;
+    }
     if (!data) {
         return;
     }
@@ -259,7 +330,7 @@ void WeatherController::onCurrentReady(WeatherData* data) {
     // Set parent to controller since this is standalone current weather
     data->setParent(this);
     
-    if (m_current) {
+    if (m_current && m_current->parent() == this) {
         m_current->deleteLater();
     }
     m_current = data;
@@ -267,6 +338,11 @@ void WeatherController::onCurrentReady(WeatherData* data) {
 }
 
 void WeatherController::onServiceError(QString error) {
+    bool callerOwns = true;
+    if (!shouldProcessServiceResponse(sender(), callerOwns)) {
+        qDebug() << "Ignoring service error from inactive source:" << error;
+        return;
+    }
     qWarning() << "Service error:" << error;
     setErrorMessage(error);
     setLoading(false);
@@ -276,6 +352,12 @@ void WeatherController::onServiceError(QString error) {
 }
 
 void WeatherController::fetchNowcast(double latitude, double longitude) {
+    if (!isValidCoordinate(latitude, longitude)) {
+        qWarning() << "Rejected invalid coordinates for nowcast" << latitude << longitude;
+        setErrorMessage("Invalid GPS coordinates");
+        return;
+    }
+    
     qInfo() << "Fetching nowcast for" << latitude << longitude;
     
     // First get current weather
@@ -285,6 +367,8 @@ void WeatherController::fetchNowcast(double latitude, double longitude) {
             m_aggregator->fetchForecast(latitude, longitude);
         } else if (m_serviceProvider == PirateWeather && m_pirateService->isAvailable()) {
             m_pirateService->fetchCurrent(latitude, longitude);
+        } else if (m_serviceProvider == Weatherbit && m_weatherbitService->isAvailable()) {
+            m_weatherbitService->fetchCurrent(latitude, longitude);
         } else {
             m_nwsService->fetchCurrent(latitude, longitude);
         }
@@ -388,6 +472,48 @@ void WeatherController::saveToCache(const QString& key, const QList<WeatherData*
     
     QJsonDocument doc(cacheObj);
     m_cache->put(key, doc.toJson(), 3600); // 1 hour TTL
+}
+
+bool WeatherController::isValidCoordinate(double latitude, double longitude) const {
+    if (!std::isfinite(latitude) || !std::isfinite(longitude)) {
+        return false;
+    }
+    const bool latValid = latitude >= -90.0 && latitude <= 90.0;
+    const bool lonValid = longitude >= -180.0 && longitude <= 180.0;
+    return latValid && lonValid;
+}
+
+bool WeatherController::shouldProcessServiceResponse(QObject* source, bool& callerOwnsData) const {
+    callerOwnsData = true;
+
+    if (m_aggregator && m_aggregator->isSpatioTemporalActive()) {
+        if (source != m_aggregator) {
+            callerOwnsData = false;
+            return false;
+        }
+    }
+
+    if (source == m_aggregator) {
+        if (m_useAggregation && m_serviceProvider == Aggregated) {
+            return true;
+        }
+        callerOwnsData = true;
+        return false;
+    }
+    
+    if (source == m_nwsService) {
+        return m_serviceProvider == NWS;
+    }
+
+    if (source == m_pirateService) {
+        return m_serviceProvider == PirateWeather;
+    }
+
+    if (source == m_weatherbitService) {
+        return m_serviceProvider == Weatherbit;
+    }
+
+    return false;
 }
 
 void WeatherController::saveLocation(const QString& name, double latitude, double longitude) {

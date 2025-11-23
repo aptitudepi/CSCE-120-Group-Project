@@ -4,6 +4,9 @@
 #include <algorithm>
 #include <QtMath>
 #include <QMap>
+#include <QSet>
+#include <QVector>
+#include <QProcessEnvironment>
 
 WeatherAggregator::WeatherAggregator(QObject *parent)
     : QObject(parent)
@@ -11,21 +14,96 @@ WeatherAggregator::WeatherAggregator(QObject *parent)
     , m_timeoutTimer(new QTimer(this))
     , m_movingAverageFilter(new MovingAverageFilter(this))
     , m_movingAverageEnabled(false)
+    , m_defaultTimeoutMs(10000)
+    , m_spatioTimeoutMs(30000)
     , m_totalRequests(0)
     , m_successfulRequests(0)
     , m_failedRequests(0)
     , m_startTime(QDateTime::currentDateTime())
+    , m_spatioTemporalEngine(new SpatioTemporalEngine(this))
+    , m_spatioTemporalEnabled(true)
+    , m_spatioTemporalActive(false)
+    , m_gridMatchTolerance(0.01)
 {
     m_timeoutTimer->setSingleShot(true);
-    m_timeoutTimer->setInterval(10000); // 10 second timeout
+    m_timeoutTimer->setInterval(m_defaultTimeoutMs);
     connect(m_timeoutTimer, &QTimer::timeout, this, &WeatherAggregator::onTimeout);
     
     // Configure moving average filter defaults
     m_movingAverageFilter->setWindowSize(10);
     m_movingAverageFilter->setAlpha(0.2);
+
+    auto envDouble = [](const char* key, double fallback) {
+        QByteArray value = qgetenv(key);
+        if (value.isEmpty()) {
+            return fallback;
+        }
+        bool ok = false;
+        double v = value.toDouble(&ok);
+        return ok ? v : fallback;
+    };
+
+    auto envInt = [](const char* key, int fallback) {
+        bool ok = false;
+        int v = qEnvironmentVariableIntValue(key, &ok);
+        return ok ? v : fallback;
+    };
+
+    // Configure spatio-temporal defaults (overridable via env)
+    SpatioTemporalEngine::GridConfig gridConfig = m_spatioTemporalEngine->gridConfig();
+    gridConfig.offsetDistanceKm = envDouble("HLW_SPATIAL_OFFSET_KM", gridConfig.offsetDistanceKm);
+    m_spatioTemporalEngine->setGridConfig(gridConfig);
+
+    m_defaultTimeoutMs = qMax(1000, envInt("HLW_TIMEOUT_MS", m_defaultTimeoutMs));
+    int defaultSpatioTimeout = qMax(gridConfig.pointCount * 4000, m_defaultTimeoutMs * 2);
+    m_spatioTimeoutMs = qMax(defaultSpatioTimeout, envInt("HLW_SPATIOTEMPORAL_TIMEOUT_MS", defaultSpatioTimeout));
+    m_timeoutTimer->setInterval(m_defaultTimeoutMs);
+
+    SpatioTemporalEngine::TemporalConfig temporalConfig = m_spatioTemporalEngine->temporalConfig();
+    temporalConfig.outputGranularityMinutes = envInt("HLW_TEMPORAL_GRANULARITY_MIN",
+                                                     temporalConfig.outputGranularityMinutes);
+    temporalConfig.smoothingWindowMinutes = envInt("HLW_TEMPORAL_SMOOTHING_MIN",
+                                                   temporalConfig.smoothingWindowMinutes);
+    int interpolationMode = envInt("HLW_TEMPORAL_METHOD", static_cast<int>(temporalConfig.method));
+    if (interpolationMode >= static_cast<int>(TemporalInterpolator::Linear) &&
+        interpolationMode <= static_cast<int>(TemporalInterpolator::StepFunction)) {
+        temporalConfig.method = static_cast<TemporalInterpolator::InterpolationMethod>(interpolationMode);
+    }
+    m_spatioTemporalEngine->setTemporalConfig(temporalConfig);
+
+    SpatioTemporalEngine::SpatialConfig spatialConfig = m_spatioTemporalEngine->spatialConfig();
+    spatialConfig.idwPower = envDouble("HLW_SPATIAL_IDW_POWER", spatialConfig.idwPower);
+    spatialConfig.strategy = static_cast<SpatialInterpolator::InterpolationStrategy>(
+        envInt("HLW_SPATIAL_STRATEGY", static_cast<int>(spatialConfig.strategy)));
+    spatialConfig.missingPointsThreshold = envInt("HLW_SPATIAL_MISSING_THRESHOLD",
+                                                  spatialConfig.missingPointsThreshold);
+    m_spatioTemporalEngine->setSpatialConfig(spatialConfig);
+
+    SpatioTemporalEngine::APIWeights weights = m_spatioTemporalEngine->apiWeights();
+    double nwsWeight = envDouble("HLW_API_WEIGHT_NWS", 0.5);
+    double pirateWeight = envDouble("HLW_API_WEIGHT_PIRATE", 0.3);
+    double weatherbitWeight = envDouble("HLW_API_WEIGHT_WEATHERBIT", 0.2);
+    if (nwsWeight <= 0.0 && pirateWeight <= 0.0 && weatherbitWeight <= 0.0) {
+        nwsWeight = 0.5;
+        pirateWeight = 0.3;
+        weatherbitWeight = 0.2;
+    }
+    weights.weights["NWS"] = nwsWeight;
+    weights.weights["PirateWeather"] = pirateWeight;
+    weights.weights["Weatherbit"] = weatherbitWeight;
+    m_spatioTemporalEngine->setAPIWeights(weights);
+
+    m_gridMatchTolerance = envDouble("HLW_GRID_TOLERANCE_DEG", m_gridMatchTolerance);
+    bool ok = false;
+    int disableFlag = qEnvironmentVariableIntValue("HLW_DISABLE_SPATIOTEMPORAL", &ok);
+    if (ok && disableFlag == 1) {
+        m_spatioTemporalEnabled = false;
+    }
 }
 
-WeatherAggregator::~WeatherAggregator() = default;
+WeatherAggregator::~WeatherAggregator() {
+    resetSpatioTemporalState();
+}
 
 void WeatherAggregator::addService(WeatherService* service, int priority) {
     if (!service) return;
@@ -90,8 +168,9 @@ void WeatherAggregator::fetchForecast(double latitude, double longitude) {
     m_currentLat = latitude;
     m_currentLon = longitude;
     
-    // Start timeout timer
-    m_timeoutTimer->start();
+    const bool useSpatio = shouldUseSpatioTemporal();
+    int timeoutMs = useSpatio ? m_spatioTimeoutMs : m_defaultTimeoutMs;
+    m_timeoutTimer->start(timeoutMs);
     
     // Filter available services
     QList<WeatherService*> availableServices;
@@ -107,7 +186,12 @@ void WeatherAggregator::fetchForecast(double latitude, double longitude) {
         return;
     }
     
-    // Track pending requests
+    if (useSpatio) {
+        startSpatioTemporalRequest(latitude, longitude, availableServices);
+        return;
+    }
+
+    // Track pending requests for legacy aggregation pipeline
     m_pendingRequests[cacheKey] = availableServices;
     m_pendingForecasts[cacheKey] = QList<ForecastWithService>();
     m_pendingCurrentWeather[cacheKey] = QList<WeatherData*>();
@@ -174,6 +258,18 @@ void WeatherAggregator::onServiceForecastReady(QList<WeatherData*> data) {
     if (!service) {
         return;
     }
+
+    if (m_spatioTemporalActive && m_spatioContexts.contains(service)) {
+        handleSpatioTemporalForecast(service, data);
+        return;
+    }
+
+    const QString cacheKey = m_currentRequestKey;
+    if (!m_pendingForecasts.contains(cacheKey)) {
+        qDebug() << "WeatherAggregator ignoring forecast response from"
+                 << service->serviceName() << "because no aggregation request is active";
+        return;
+    }
     
     updateServiceAvailability(service, true, responseTime);
     m_successfulRequests++;
@@ -181,8 +277,6 @@ void WeatherAggregator::onServiceForecastReady(QList<WeatherData*> data) {
     // Handle based on strategy
     if (m_strategy == WeightedAverage || m_strategy == BestAvailable) {
         // Collect forecasts from multiple sources
-        QString cacheKey = m_currentRequestKey;
-        
         // Store service response time
         m_serviceResponseTimes[cacheKey][service] = responseTime;
         
@@ -195,8 +289,8 @@ void WeatherAggregator::onServiceForecastReady(QList<WeatherData*> data) {
         m_receivedServices[cacheKey].append(service);
         
         // Check if all services have responded
-        QList<WeatherService*> expectedServices = m_pendingRequests[cacheKey];
-        QList<WeatherService*> receivedServices = m_receivedServices[cacheKey];
+        QList<WeatherService*> expectedServices = m_pendingRequests.value(cacheKey);
+        QList<WeatherService*> receivedServices = m_receivedServices.value(cacheKey);
         
         if (receivedServices.size() >= expectedServices.size()) {
             // All services have responded, merge the forecasts
@@ -257,8 +351,21 @@ void WeatherAggregator::onServiceForecastReady(QList<WeatherData*> data) {
 }
 
 void WeatherAggregator::onServiceCurrentReady(WeatherData* data) {
+    if (m_spatioTemporalActive) {
+        // Current conditions are derived from the spatio-temporal pipeline
+        // once the combined forecast is ready.
+        return;
+    }
+
     WeatherService* service = qobject_cast<WeatherService*>(sender());
     if (!service) {
+        return;
+    }
+
+    const QString cacheKey = m_currentRequestKey;
+    if (!m_pendingCurrentWeather.contains(cacheKey)) {
+        qDebug() << "WeatherAggregator ignoring current-weather response from"
+                 << service->serviceName() << "because no aggregation request is active";
         return;
     }
     
@@ -268,12 +375,11 @@ void WeatherAggregator::onServiceCurrentReady(WeatherData* data) {
     // Handle based on strategy
     if (m_strategy == WeightedAverage || m_strategy == BestAvailable) {
         // Collect current weather from multiple sources
-        QString cacheKey = m_currentRequestKey;
         m_pendingCurrentWeather[cacheKey].append(data);
         
         // Check if all services have responded (use same logic as forecasts)
-        QList<WeatherService*> expectedServices = m_pendingRequests[cacheKey];
-        QList<WeatherService*> receivedServices = m_receivedServices[cacheKey];
+        QList<WeatherService*> expectedServices = m_pendingRequests.value(cacheKey);
+        QList<WeatherService*> receivedServices = m_receivedServices.value(cacheKey);
         
         if (receivedServices.size() >= expectedServices.size() && 
             m_pendingCurrentWeather[cacheKey].size() >= expectedServices.size()) {
@@ -319,6 +425,11 @@ void WeatherAggregator::onServiceCurrentReady(WeatherData* data) {
 void WeatherAggregator::onServiceError(QString message) {
     WeatherService* service = qobject_cast<WeatherService*>(sender());
     if (service) {
+        if (m_spatioTemporalActive && m_spatioContexts.contains(service)) {
+            markServiceGridError(service, message);
+            finalizeSpatioTemporalResult();
+            return;
+        }
         updateServiceAvailability(service, false, 0);
     }
     
@@ -339,6 +450,12 @@ void WeatherAggregator::onServiceError(QString message) {
 }
 
 void WeatherAggregator::onTimeout() {
+    if (m_spatioTemporalActive) {
+        m_failedRequests++;
+        emit error("Request timeout");
+        resetSpatioTemporalState();
+        return;
+    }
     m_failedRequests++;
     emit error("Request timeout");
     emit metricsUpdated(getMetrics());
@@ -817,5 +934,246 @@ WeatherData* WeatherAggregator::mergeCurrentWeather(const QList<WeatherData*>& c
     merged->setWeatherDescription(maxWeightData->weatherDescription());
     
     return merged;
+}
+
+bool WeatherAggregator::shouldUseSpatioTemporal() const {
+    if (!m_spatioTemporalEnabled) {
+        return false;
+    }
+    if (m_strategy != WeightedAverage) {
+        return false;
+    }
+    return !m_services.isEmpty();
+}
+
+void WeatherAggregator::startSpatioTemporalRequest(double latitude, double longitude,
+                                                   const QList<WeatherService*>& services) {
+    resetSpatioTemporalState();
+    m_spatioTemporalActive = true;
+    m_spatioGrid = m_spatioTemporalEngine->generateGrid(latitude, longitude);
+    if (m_spatioGrid.isEmpty()) {
+        emit error("Unable to generate spatial grid for request");
+        m_spatioTemporalActive = false;
+        return;
+    }
+
+    for (WeatherService* service : services) {
+        if (!service) {
+            continue;
+        }
+        SpatioServiceContext ctx;
+        ctx.service = service;
+        ctx.apiName = service->serviceName();
+        for (const QPointF& point : m_spatioGrid) {
+            SpatioGridPointState state;
+            state.coordinate = point;
+            ctx.gridStates.append(state);
+        }
+        m_spatioContexts.insert(service, ctx);
+
+        for (const QPointF& point : m_spatioGrid) {
+            service->fetchForecast(point.x(), point.y());
+        }
+    }
+}
+
+void WeatherAggregator::handleSpatioTemporalForecast(WeatherService* service, QList<WeatherData*> data) {
+    if (!m_spatioContexts.contains(service)) {
+        qWarning() << "Spatio-temporal response from unknown service" << service->serviceName();
+        qDeleteAll(data);
+        return;
+    }
+
+    updateServiceAvailability(service, true, m_requestTimer.elapsed());
+
+    if (data.isEmpty()) {
+        qWarning() << "Received empty forecast data for spatio-temporal grid from"
+                   << service->serviceName();
+        return;
+    }
+
+    double responseLat = data.first()->latitude();
+    double responseLon = data.first()->longitude();
+    int gridIndex = matchGridIndex(m_spatioGrid, responseLat, responseLon);
+    if (gridIndex < 0) {
+        qWarning() << "Unable to match grid point for" << responseLat << responseLon
+                   << "from" << service->serviceName();
+        qDeleteAll(data);
+        return;
+    }
+
+    SpatioServiceContext& ctx = m_spatioContexts[service];
+    if (gridIndex >= ctx.gridStates.size()) {
+        qWarning() << "Grid index mismatch for service" << service->serviceName();
+        qDeleteAll(data);
+        return;
+    }
+
+    qDeleteAll(ctx.gridStates[gridIndex].forecasts);
+    ctx.gridStates[gridIndex].forecasts = data;
+    ctx.gridStates[gridIndex].completed = true;
+
+    bool serviceComplete = std::all_of(ctx.gridStates.begin(), ctx.gridStates.end(),
+        [](const SpatioGridPointState& state) { return state.completed; });
+
+    if (serviceComplete) {
+        processSpatioTemporalService(service);
+    }
+}
+
+void WeatherAggregator::processSpatioTemporalService(WeatherService* service) {
+    if (!m_spatioContexts.contains(service)) {
+        return;
+    }
+
+    SpatioServiceContext& ctx = m_spatioContexts[service];
+    if (ctx.hasTemporalResult || ctx.hasError) {
+        return;
+    }
+
+    QSet<QDateTime> timestamps;
+    for (const SpatioGridPointState& state : ctx.gridStates) {
+        for (WeatherData* entry : state.forecasts) {
+            if (entry) {
+                timestamps.insert(entry->timestamp());
+            }
+        }
+    }
+
+    QList<QDateTime> sortedTimes = timestamps.values();
+    std::sort(sortedTimes.begin(), sortedTimes.end());
+
+    QList<WeatherData*> spatialTimeline;
+    for (const QDateTime& ts : sortedTimes) {
+        QList<WeatherData*> samples = buildSpatialSamples(ctx.gridStates, ts);
+        if (samples.isEmpty()) {
+            continue;
+        }
+        WeatherData* smoothed = m_spatioTemporalEngine->applySpatialSmoothing(samples, m_currentLat, m_currentLon);
+        if (smoothed) {
+            spatialTimeline.append(smoothed);
+        }
+    }
+
+    ctx.spatialTimeline = spatialTimeline;
+    ctx.temporalTimeline = m_spatioTemporalEngine->applyTemporalInterpolation(ctx.spatialTimeline);
+    ctx.hasTemporalResult = true;
+
+    for (SpatioGridPointState& state : ctx.gridStates) {
+        qDeleteAll(state.forecasts);
+        state.forecasts.clear();
+        state.completed = false;
+    }
+    ctx.gridStates.clear();
+
+    finalizeSpatioTemporalResult();
+}
+
+void WeatherAggregator::finalizeSpatioTemporalResult() {
+    if (!m_spatioTemporalActive) {
+        return;
+    }
+
+    bool waitingForService = false;
+    for (auto it = m_spatioContexts.cbegin(); it != m_spatioContexts.cend(); ++it) {
+        if (!it.value().hasTemporalResult && !it.value().hasError) {
+            waitingForService = true;
+            break;
+        }
+    }
+
+    if (waitingForService) {
+        return;
+    }
+
+    QMap<QString, QList<WeatherData*>> apiForecasts;
+    for (auto it = m_spatioContexts.begin(); it != m_spatioContexts.end(); ++it) {
+        const SpatioServiceContext& ctx = it.value();
+        if (ctx.hasTemporalResult && !ctx.temporalTimeline.isEmpty()) {
+            apiForecasts.insert(ctx.apiName, ctx.temporalTimeline);
+        }
+    }
+
+    if (apiForecasts.isEmpty()) {
+        emit error("No API data available for spatio-temporal aggregation");
+        resetSpatioTemporalState();
+        return;
+    }
+
+    QList<WeatherData*> combined = m_spatioTemporalEngine->combineAPIForecasts(apiForecasts);
+    if (combined.isEmpty()) {
+        emit error("Failed to combine API forecasts");
+        resetSpatioTemporalState();
+        return;
+    }
+
+    m_timeoutTimer->stop();
+    m_successfulRequests++;
+    emit forecastReady(combined);
+    emit metricsUpdated(getMetrics());
+
+    resetSpatioTemporalState();
+    m_spatioTemporalActive = false;
+}
+
+void WeatherAggregator::resetSpatioTemporalState(bool deleteTimelines) {
+    for (auto it = m_spatioContexts.begin(); it != m_spatioContexts.end(); ++it) {
+        for (SpatioGridPointState& state : it.value().gridStates) {
+            qDeleteAll(state.forecasts);
+            state.forecasts.clear();
+        }
+        if (deleteTimelines) {
+            qDeleteAll(it.value().spatialTimeline);
+            qDeleteAll(it.value().temporalTimeline);
+        }
+        it.value().spatialTimeline.clear();
+        it.value().temporalTimeline.clear();
+        it.value().gridStates.clear();
+        it.value().hasTemporalResult = false;
+        it.value().hasError = false;
+    }
+    m_spatioContexts.clear();
+    m_spatioGrid.clear();
+    m_spatioTemporalActive = false;
+}
+
+void WeatherAggregator::cancelSpatioTemporalRequests() {
+    if (!m_spatioTemporalActive) {
+        return;
+    }
+    resetSpatioTemporalState();
+}
+
+int WeatherAggregator::matchGridIndex(const QList<QPointF>& grid, double lat, double lon) const {
+    for (int i = 0; i < grid.size(); ++i) {
+        if (qAbs(grid[i].x() - lat) <= m_gridMatchTolerance &&
+            qAbs(grid[i].y() - lon) <= m_gridMatchTolerance) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+QList<WeatherData*> WeatherAggregator::buildSpatialSamples(const QVector<SpatioGridPointState>& states,
+                                                           const QDateTime& timestamp) const {
+    QList<WeatherData*> samples;
+    for (const SpatioGridPointState& state : states) {
+        for (WeatherData* entry : state.forecasts) {
+            if (entry && entry->timestamp() == timestamp) {
+                samples.append(entry);
+                break;
+            }
+        }
+    }
+    return samples;
+}
+
+void WeatherAggregator::markServiceGridError(WeatherService* service, const QString& errorMessage) {
+    if (!m_spatioContexts.contains(service)) {
+        return;
+    }
+    SpatioServiceContext& ctx = m_spatioContexts[service];
+    ctx.hasError = true;
+    qWarning() << "Spatio-temporal request failed for" << ctx.apiName << ":" << errorMessage;
 }
 

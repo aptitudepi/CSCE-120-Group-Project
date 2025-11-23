@@ -10,6 +10,9 @@
 #include "services/WeatherService.h"
 #include "services/MovingAverageFilter.h"
 #include "models/WeatherData.h"
+#include "nowcast/SpatioTemporalEngine.h"
+#include <QPointF>
+#include <QVector>
 
 /**
  * @brief Aggregator service for multiple weather data sources
@@ -63,6 +66,8 @@ public:
      * @brief Set EMA alpha (smoothing factor)
      */
     void setMovingAverageAlpha(double alpha);
+    bool isSpatioTemporalActive() const { return m_spatioTemporalActive; }
+    void cancelSpatioTemporalRequests();
     
     /**
      * @brief Fetch forecast using aggregation strategy
@@ -120,6 +125,34 @@ private:
         WeatherService* service;
         qint64 responseTime;
     };
+
+    struct SpatioGridPointState {
+        QPointF coordinate;
+        QList<WeatherData*> forecasts;
+        bool completed = false;
+    };
+
+    struct SpatioServiceContext {
+        WeatherService* service = nullptr;
+        QString apiName;
+        QVector<SpatioGridPointState> gridStates;
+        QList<WeatherData*> spatialTimeline;
+        QList<WeatherData*> temporalTimeline;
+        bool hasTemporalResult = false;
+        bool hasError = false;
+    };
+
+    bool shouldUseSpatioTemporal() const;
+    void startSpatioTemporalRequest(double latitude, double longitude,
+                                    const QList<WeatherService*>& services);
+    void handleSpatioTemporalForecast(WeatherService* service, QList<WeatherData*> data);
+    void processSpatioTemporalService(WeatherService* service);
+    void finalizeSpatioTemporalResult();
+    void resetSpatioTemporalState(bool deleteTimelines = true);
+    int matchGridIndex(const QList<QPointF>& grid, double lat, double lon) const;
+    QList<WeatherData*> buildSpatialSamples(const QVector<SpatioGridPointState>& states,
+                                            const QDateTime& timestamp) const;
+    void markServiceGridError(WeatherService* service, const QString& errorMessage);
     
     QList<ServiceEntry> m_services;
     AggregationStrategy m_strategy;
@@ -127,6 +160,8 @@ private:
     QTimer* m_timeoutTimer;
     MovingAverageFilter* m_movingAverageFilter;
     bool m_movingAverageEnabled;
+    int m_defaultTimeoutMs;
+    int m_spatioTimeoutMs;
     
     // Performance tracking
     QList<qint64> m_responseTimes;
@@ -145,6 +180,14 @@ private:
     QString m_currentRequestKey;
     double m_currentLat;
     double m_currentLon;
+
+    // Spatio-temporal pipeline
+    SpatioTemporalEngine* m_spatioTemporalEngine;
+    bool m_spatioTemporalEnabled;
+    bool m_spatioTemporalActive;
+    QList<QPointF> m_spatioGrid;
+    QHash<WeatherService*, SpatioServiceContext> m_spatioContexts;
+    double m_gridMatchTolerance;
 };
 
 #endif // WEATHERAGGREGATOR_H

@@ -5,6 +5,7 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QString>
+#include <QSet>
 
 /**
  * @brief Pirate Weather API integration
@@ -37,8 +38,20 @@ public:
     
     bool isAvailable() const override { return hasApiKey(); }
     
+    /**
+     * @brief Cancel any in-flight network requests.
+     * 
+     * Used when the caller issues a new fetch before the previous request
+     * completes (e.g., rapid GPS updates). Ensures we don't process stale
+     * replies that can lead to inconsistent state.
+     */
+    void cancelActiveRequests();
+    
 signals:
     void minuteForecastReady(QList<WeatherData*> data);
+    
+    // Expose for testing
+    friend class PirateWeatherServiceTest;
     
 private slots:
     void onForecastReplyFinished();
@@ -49,9 +62,12 @@ private:
     QList<WeatherData*> parseHourlyData(const QJsonArray& hourly, double lat, double lon);
     QList<WeatherData*> parseMinutelyData(const QJsonArray& minutely, double lat, double lon);
     WeatherData* parseDataPoint(const QJsonObject& point, double lat, double lon);
+    void abortActiveRequests();
+    void unregisterReply(QNetworkReply* reply);
     
     QNetworkAccessManager* m_networkManager;
     QString m_apiKey;
+    QSet<QNetworkReply*> m_activeReplies;
     
     static const QString BASE_URL;
 };
