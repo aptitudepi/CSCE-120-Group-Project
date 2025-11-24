@@ -62,6 +62,8 @@ public:
     Q_INVOKABLE QVariantList getSavedLocations();
     Q_INVOKABLE void deleteLocation(int locationId);
     Q_INVOKABLE void loadLocation(int locationId);
+    Q_INVOKABLE void setPirateWeatherApiKey(const QString& apiKey);
+    Q_INVOKABLE void setWeatherbitApiKey(const QString& apiKey);
     
 signals:
     void forecastModelChanged();

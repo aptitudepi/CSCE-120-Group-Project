@@ -580,6 +580,29 @@ void WeatherController::loadLocation(int locationId) {
             return;
         }
     }
-    setErrorMessage("Location not found");
+}
+
+void WeatherController::setPirateWeatherApiKey(const QString& apiKey) {
+    if (m_pirateService) {
+        m_pirateService->setApiKey(apiKey);
+        qInfo() << "Pirate Weather API key updated";
+        
+        // Enable aggregation if we now have API keys
+        if (m_pirateService->hasApiKey() || m_weatherbitService->hasApiKey()) {
+            setUseAggregation(true);
+        }
+    }
+}
+
+void WeatherController::setWeatherbitApiKey(const QString& apiKey) {
+    if (m_weatherbitService) {
+        m_weatherbitService->setApiKey(apiKey);
+        qInfo() << "Weatherbit API key updated";
+        
+        // Enable aggregation if we now have API keys
+        if (m_pirateService->hasApiKey() || m_weatherbitService->hasApiKey()) {
+            setUseAggregation(true);
+        }
+    }
 }
 

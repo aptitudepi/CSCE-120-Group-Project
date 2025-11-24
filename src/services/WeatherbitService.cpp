@@ -52,6 +52,7 @@ QNetworkRequest WeatherbitService::buildRequest(const QUrl& url) const
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::UserAgentHeader, "HyperlocalWeather/1.0");
     request.setRawHeader("Accept", "application/json");
+    request.setTransferTimeout(30000); // 30 second timeout
     return request;
 }
 

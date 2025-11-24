@@ -187,7 +187,7 @@ Page {
             // API Keys
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 150
+                Layout.preferredHeight: 220
                 color: "white"
                 radius: 10
                 border.color: "#e0e0e0"
@@ -211,11 +211,40 @@ Page {
                         echoMode: TextInput.Password
                     }
                     
+                    TextField {
+                        id: weatherbitApiKey
+                        Layout.fillWidth: true
+                        placeholderText: qsTr("Weatherbit API Key")
+                        echoMode: TextInput.Password
+                    }
+                    
                     Button {
-                        text: qsTr("Save API Key")
+                        text: qsTr("Save API Keys")
                         onClicked: {
-                            // TODO: Save API key to settings
-                            // For now, this would be handled by controller
+                            if (pirateApiKey.text.length > 0) {
+                                weatherController.setPirateWeatherApiKey(pirateApiKey.text)
+                            }
+                            if (weatherbitApiKey.text.length > 0) {
+                                weatherController.setWeatherbitApiKey(weatherbitApiKey.text)
+                            }
+                            saveConfirmation.visible = true
+                            saveConfirmationTimer.restart()
+                        }
+                    }
+                    
+                    Text {
+                        id: saveConfirmation
+                        text: qsTr("API keys saved successfully!")
+                        font.pixelSize: 12
+                        color: "#4caf50"
+                        visible: false
+                        
+                        Timer {
+                            id: saveConfirmationTimer
+                            interval: 3000
+                            running: false
+                            repeat: false
+                            onTriggered: saveConfirmation.visible = false
                         }
                     }
                 }
