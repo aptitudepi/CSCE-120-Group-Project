@@ -8,6 +8,15 @@ import HyperlocalWeather 1.0
 Page {
     id: mainPage
 
+    function formatCountdown(seconds) {
+        var total = Math.max(0, seconds || 0)
+        var minutes = Math.floor(total / 60)
+        var secs = total % 60
+        var mm = minutes < 10 ? "0" + minutes : minutes
+        var ss = secs < 10 ? "0" + secs : secs
+        return mm + ":" + ss
+    }
+
     readonly property var defaultCoordinate: QtPositioning.coordinate(30.6272, -96.3344)
     readonly property var allowedRegion: ({
         north: 31.3,
@@ -19,6 +28,9 @@ Page {
     property bool hasSelectedCoordinate: false
     property bool outsideAllowedRegion: false
     property int mapOverlayTrim: 48
+
+    property bool alertsInitialized: false
+    property bool defaultAlertConfigured: false
 
     function clampToAllowedRegion(lat, lon) {
         var boundedLat = Math.min(Math.max(lat, allowedRegion.south), allowedRegion.north)
@@ -39,10 +51,24 @@ Page {
         }
     }
 
-    ColumnLayout {
+    Flickable {
+        id: mainScroll
         anchors.fill: parent
-        anchors.margins: 20
-        spacing: 20
+        contentWidth: width
+        contentHeight: mainColumn.implicitHeight + 40
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+
+        ScrollBar.vertical: ScrollBar {
+            policy: ScrollBar.AsNeeded
+        }
+
+        ColumnLayout {
+            id: mainColumn
+            x: 20
+            y: 20
+            width: Math.max(mainScroll.width - 40, 0)
+            spacing: 20
 
         // Header
         Rectangle {
@@ -107,6 +133,99 @@ Page {
             }
         }
 
+        // Alert monitoring status
+        Rectangle {
+            id: alertMonitorCard
+            Layout.fillWidth: true
+            Layout.preferredHeight: monitorLayout.implicitHeight + 24
+            color: "#fff8e1"
+            radius: 8
+            border.color: "#ffe082"
+            border.width: 1
+
+            property int alertCount: alertController.alerts ? alertController.alerts.length : 0
+            readonly property bool hasAlerts: alertCount > 0
+
+            ColumnLayout {
+                id: monitorLayout
+                anchors.fill: parent
+                anchors.margins: 12
+                spacing: 6
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+
+                    Text {
+                        text: qsTr("Alert Monitor")
+                        font.pixelSize: 18
+                        font.bold: true
+                        color: "#8a6d3b"
+                    }
+
+                    Rectangle {
+                        radius: 10
+                        color: alertMonitorCard.hasAlerts ? "#ffb300" : "#ffe082"
+                        Layout.preferredHeight: 22
+                        Layout.preferredWidth: 84
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: alertMonitorCard.hasAlerts ? qsTr("%1 active").arg(alertMonitorCard.alertCount) : qsTr("No alerts")
+                            font.pixelSize: 11
+                            font.bold: true
+                            color: alertMonitorCard.hasAlerts ? "white" : "#8a6d3b"
+                        }
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    Button {
+                        text: qsTr("Check Now")
+                        font.pixelSize: 12
+                        implicitHeight: 30
+                        enabled: alertController.monitoring
+                        onClicked: {
+                            alertController.checkAlerts()
+                            alertController.startMonitoring()
+                        }
+                    }
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    text: formatCountdown(alertController.secondsToNextCheck)
+                    font.pixelSize: 30
+                    font.bold: true
+                    color: "#ef6c00"
+                    horizontalAlignment: Text.AlignLeft
+                }
+
+                ProgressBar {
+                    Layout.fillWidth: true
+                    implicitHeight: 6
+                    from: 0
+                    to: 1
+                    value: alertController.checkIntervalSeconds > 0
+                           ? 1 - Math.min(Math.max(alertController.secondsToNextCheck, 0),
+                                   alertController.checkIntervalSeconds) / alertController.checkIntervalSeconds
+                           : 0
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    text: alertController.monitoring
+                          ? (alertMonitorCard.hasAlerts
+                             ? qsTr("Next automatic check in %1 seconds").arg(Math.max(alertController.secondsToNextCheck, 0))
+                             : qsTr("Add an alert to begin monitoring."))
+                          : qsTr("Alert monitoring paused")
+                    font.pixelSize: 11
+                    color: "#8a6d3b"
+                    wrapMode: Text.WordWrap
+                }
+            }
+        }
+
         // Location Input
         LocationInput {
             id: locationInput
@@ -118,6 +237,19 @@ Page {
                 mainPage.hasSelectedCoordinate = true
                 mainPage.outsideAllowedRegion = mainPage.isOutOfBounds(lat, lon, constrained)
                 weatherController.fetchForecast(constrained.latitude, constrained.longitude)
+                if (!mainPage.alertsInitialized) {
+                    alertController.startMonitoring()
+                    mainPage.alertsInitialized = true
+                }
+                if (!mainPage.defaultAlertConfigured &&
+                        (!alertController.alerts || alertController.alerts.length === 0)) {
+                    var defaultThreshold = weatherController.current
+                            ? Math.round(weatherController.current.temperature + 2)
+                            : 95
+                    alertController.addAlert(constrained.latitude, constrained.longitude,
+                                             "temperature", defaultThreshold)
+                    mainPage.defaultAlertConfigured = true
+                }
             }
         }
 
@@ -343,6 +475,137 @@ Page {
                     weatherData: model
                 }
             }
+        }
+        }
+    }
+
+    Popup {
+        id: monitorPopup
+        x: (parent.width - width) / 2
+        y: 20
+        width: Math.min(mainPage.width * 0.45, 320)
+        implicitHeight: monitorPopupLayout.implicitHeight + 32
+        modal: false
+        focus: false
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        background: Rectangle {
+            color: "white"
+            radius: 10
+            border.color: "#ffe082"
+            border.width: 1
+        }
+
+        ColumnLayout {
+            id: monitorPopupLayout
+            anchors.fill: parent
+            anchors.margins: 16
+            spacing: 6
+
+            Text {
+                id: monitorPopupTitle
+                text: qsTr("Alert Cycle")
+                font.pixelSize: 16
+                font.bold: true
+                color: "#8a6d3b"
+            }
+
+            Text {
+                id: monitorPopupMessage
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                color: "#5d4037"
+                font.pixelSize: 13
+            }
+        }
+    }
+
+    Timer {
+        id: monitorPopupAutoClose
+        interval: 2500
+        running: false
+        repeat: false
+        onTriggered: monitorPopup.close()
+    }
+
+    Popup {
+        id: alertPopup
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
+        width: Math.min(mainPage.width * 0.6, 420)
+        height: 230
+        modal: true
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        background: Rectangle {
+            color: "white"
+            radius: 12
+            border.color: "#ffcc80"
+            border.width: 2
+        }
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 20
+            spacing: 14
+
+            Text {
+                id: alertPopupTitle
+                text: qsTr("Weather Alert")
+                font.pixelSize: 22
+                font.bold: true
+                color: "#e65100"
+            }
+
+            Text {
+                id: alertPopupLocation
+                Layout.fillWidth: true
+                font.pixelSize: 14
+                color: "#6d4c41"
+                wrapMode: Text.WordWrap
+            }
+
+            Text {
+                id: alertPopupMessage
+                Layout.fillWidth: true
+                font.pixelSize: 16
+                wrapMode: Text.WordWrap
+                color: "#4e342e"
+            }
+
+            Item { Layout.fillHeight: true }
+
+            Button {
+                text: qsTr("Dismiss")
+                Layout.alignment: Qt.AlignRight
+                onClicked: alertPopup.close()
+            }
+        }
+    }
+
+    Connections {
+        target: alertController
+        function onAlertTriggered(alert, message) {
+            monitorPopup.close()
+            monitorPopupAutoClose.stop()
+            alertPopupTitle.text = alert && alert.alertType
+                ? qsTr("%1 Alert").arg(alert.alertType)
+                : qsTr("Weather Alert")
+            alertPopupLocation.text = alert
+                ? qsTr("Lat: %1°, Lon: %2°")
+                    .arg(alert.latitude ? alert.latitude.toFixed(3) : "--")
+                    .arg(alert.longitude ? alert.longitude.toFixed(3) : "--")
+                : ""
+            alertPopupMessage.text = message || qsTr("Alert conditions were met.")
+            alertPopup.open()
+        }
+        function onAlertCycleStarted(activeAlerts) {
+            monitorPopupTitle.text = qsTr("Alert Cycle")
+            monitorPopupMessage.text = activeAlerts > 0
+                ? qsTr("Checking %1 active alert%2 now.")
+                    .arg(activeAlerts)
+                    .arg(activeAlerts === 1 ? "" : "s")
+                : qsTr("No active alerts to check right now.")
+            monitorPopup.open()
+            monitorPopupAutoClose.restart()
         }
     }
 }

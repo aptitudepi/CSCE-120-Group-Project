@@ -13,16 +13,18 @@ AlertController::AlertController(QObject *parent)
     : QObject(parent)
     , m_dbManager(DatabaseManager::instance())
     , m_weatherService(new NWSService(this))
-    , m_checkTimer(new QTimer(this))
+    , m_countdownTimer(new QTimer(this))
     , m_monitoring(false)
+    , m_secondsToNextCheck(0)
+    , m_checkIntervalSeconds(5 * 60)
 {
     connect(m_weatherService, &WeatherService::forecastReady,
             this, &AlertController::onForecastReady);
-    connect(m_checkTimer, &QTimer::timeout,
-            this, &AlertController::onCheckTimer);
+    connect(m_countdownTimer, &QTimer::timeout,
+            this, &AlertController::onCountdownTick);
     
     // Check alerts every 5 minutes
-    m_checkTimer->setInterval(5 * 60 * 1000);
+    m_countdownTimer->setInterval(1000);
     
     // Load alerts from database
     loadAlertsFromDatabase();
@@ -91,11 +93,13 @@ void AlertController::toggleAlert(int alertId, bool enabled) {
 
 void AlertController::startMonitoring() {
     if (m_monitoring) {
+        resetCountdown();
         return;
     }
     
     m_monitoring = true;
-    m_checkTimer->start();
+    resetCountdown();
+    m_countdownTimer->start();
     emit monitoringChanged();
     
     // Do an initial check
@@ -108,12 +112,23 @@ void AlertController::stopMonitoring() {
     }
     
     m_monitoring = false;
-    m_checkTimer->stop();
+    m_countdownTimer->stop();
+    m_secondsToNextCheck = 0;
+    emit secondsToNextCheckChanged();
     emit monitoringChanged();
 }
 
 void AlertController::checkAlerts() {
-    if (m_alerts.isEmpty()) {
+    int activeAlerts = 0;
+    for (AlertModel* alert : m_alerts) {
+        if (alert->enabled()) {
+            activeAlerts++;
+        }
+    }
+    
+    emit alertCycleStarted(activeAlerts);
+    
+    if (activeAlerts == 0) {
         return;
     }
     
@@ -153,8 +168,25 @@ void AlertController::onForecastReady(QList<WeatherData*> data) {
     // For now, assume they're managed elsewhere
 }
 
-void AlertController::onCheckTimer() {
-    checkAlerts();
+void AlertController::onCountdownTick() {
+    if (!m_monitoring) {
+        return;
+    }
+    
+    if (m_secondsToNextCheck > 0) {
+        m_secondsToNextCheck--;
+        emit secondsToNextCheckChanged();
+    }
+    
+    if (m_secondsToNextCheck <= 0) {
+        checkAlerts();
+        resetCountdown();
+    }
+}
+
+void AlertController::resetCountdown() {
+    m_secondsToNextCheck = m_checkIntervalSeconds;
+    emit secondsToNextCheckChanged();
 }
 
 void AlertController::loadAlertsFromDatabase() {
