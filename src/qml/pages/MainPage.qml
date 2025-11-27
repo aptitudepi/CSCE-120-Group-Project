@@ -18,30 +18,14 @@ Page {
     }
 
     readonly property var defaultCoordinate: QtPositioning.coordinate(30.6272, -96.3344)
-    readonly property var allowedRegion: ({
-        north: 31.3,
-        south: 29.8,
-        east: -95.5,
-        west: -97.5
-    })
     property var selectedCoordinate: defaultCoordinate
     property bool hasSelectedCoordinate: false
-    property bool outsideAllowedRegion: false
+
     property int mapOverlayTrim: 48
 
     property bool alertsInitialized: false
-    property bool defaultAlertConfigured: false
 
-    function clampToAllowedRegion(lat, lon) {
-        var boundedLat = Math.min(Math.max(lat, allowedRegion.south), allowedRegion.north)
-        var boundedLon = Math.min(Math.max(lon, allowedRegion.west), allowedRegion.east)
-        return QtPositioning.coordinate(boundedLat, boundedLon)
-    }
 
-    function isOutOfBounds(lat, lon, boundedCoord) {
-        return Math.abs(boundedCoord.latitude - lat) > 0.0001 ||
-               Math.abs(boundedCoord.longitude - lon) > 0.0001
-    }
 
     background: Rectangle {
         color: "#f0f0f0"
@@ -143,7 +127,7 @@ Page {
             border.color: "#ffe082"
             border.width: 1
 
-            property int alertCount: alertController.alerts ? alertController.alerts.length : 0
+            property int alertCount: alertController.nwsAlerts ? alertController.nwsAlerts.length : 0
             readonly property bool hasAlerts: alertCount > 0
 
             ColumnLayout {
@@ -223,6 +207,74 @@ Page {
                     color: "#8a6d3b"
                     wrapMode: Text.WordWrap
                 }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 6
+                    visible: alertMonitorCard.hasAlerts
+
+                    Repeater {
+                        model: alertMonitorCard.hasAlerts
+                               ? alertController.nwsAlerts.slice(0, 3)
+                               : []
+                        delegate: Rectangle {
+                            Layout.fillWidth: true
+                            radius: 6
+                            color: index % 2 === 0 ? "#fff3e0" : "#ffe0b2"
+                            border.color: "#ffcc80"
+                            border.width: 1
+                            implicitHeight: summaryColumn.implicitHeight + 12
+
+                            ColumnLayout {
+                                id: summaryColumn
+                                anchors.fill: parent
+                                anchors.margins: 8
+                                spacing: 4
+
+                                Text {
+                                    text: (modelData.headline || modelData.event || qsTr("Alert")).toString()
+                                    font.pixelSize: 14
+                                    font.bold: true
+                                    color: "#5d4037"
+                                    wrapMode: Text.WordWrap
+                                }
+
+                                Text {
+                                    text: qsTr("Severity: %1 • Urgency: %2")
+                                            .arg((modelData.severity || qsTr("Unknown")).toString())
+                                            .arg((modelData.urgency || qsTr("Unknown")).toString())
+                                    font.pixelSize: 11
+                                    color: "#8a6d3b"
+                                }
+
+                                Text {
+                                    text: (modelData.areas || "").toString()
+                                    font.pixelSize: 11
+                                    color: "#6d4c41"
+                                    wrapMode: Text.WordWrap
+                                }
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    alertPopupTitle.text = (modelData.event || qsTr("Weather Alert")).toString()
+                                    alertPopupLocation.text = (modelData.areas || "").toString()
+                                    var desc = (modelData.description || "").toString()
+                                    var instruction = (modelData.instruction || "").toString()
+                                    var message = desc.length > 0 ? desc : qsTr("See National Weather Service for full details.")
+                                    if (instruction.length > 0) {
+                                        message += "\n\n" + instruction
+                                    }
+                                    alertPopupMessage.text = message
+                                    alertPopup.open()
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -232,23 +284,14 @@ Page {
             Layout.fillWidth: true
             Layout.topMargin: 10
             onLocationSelected: function(lat, lon) {
-                var constrained = mainPage.clampToAllowedRegion(lat, lon)
-                mainPage.selectedCoordinate = constrained
+                var coord = QtPositioning.coordinate(lat, lon)
+                mainPage.selectedCoordinate = coord
                 mainPage.hasSelectedCoordinate = true
-                mainPage.outsideAllowedRegion = mainPage.isOutOfBounds(lat, lon, constrained)
-                weatherController.fetchForecast(constrained.latitude, constrained.longitude)
+                weatherController.fetchForecast(lat, lon)
+                alertController.setMonitorLocation(lat, lon)
                 if (!mainPage.alertsInitialized) {
                     alertController.startMonitoring()
                     mainPage.alertsInitialized = true
-                }
-                if (!mainPage.defaultAlertConfigured &&
-                        (!alertController.alerts || alertController.alerts.length === 0)) {
-                    var defaultThreshold = weatherController.current
-                            ? Math.round(weatherController.current.temperature + 2)
-                            : 95
-                    alertController.addAlert(constrained.latitude, constrained.longitude,
-                                             "temperature", defaultThreshold)
-                    mainPage.defaultAlertConfigured = true
                 }
             }
         }
@@ -324,12 +367,7 @@ Page {
                         }
                     }
 
-                    MapRectangle {
-                        color: "#2196f320"
-                        border.color: "#2196f3"
-                        topLeft: QtPositioning.coordinate(mainPage.allowedRegion.north, mainPage.allowedRegion.west)
-                        bottomRight: QtPositioning.coordinate(mainPage.allowedRegion.south, mainPage.allowedRegion.east)
-                    }
+
 
                     MapQuickItem {
                         coordinate: mainPage.selectedCoordinate
@@ -348,19 +386,15 @@ Page {
                 }
 
                 Text {
-                    text: mainPage.outsideAllowedRegion
-                          ? qsTr("Outside coverage. Showing nearest point at %1°, %2°.")
-                                .arg(mainPage.selectedCoordinate.latitude.toFixed(3))
-                                .arg(mainPage.selectedCoordinate.longitude.toFixed(3))
-                          : qsTr("Select a location within the supported coverage area.")
-                    color: mainPage.outsideAllowedRegion ? "#d32f2f" : "#666"
+                    text: qsTr("Select a location to view weather data.")
+                    color: "#666"
                     font.pixelSize: 14
                     wrapMode: Text.WordWrap
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
                     anchors.centerIn: parent
                     padding: 16
-                    visible: !mainPage.hasSelectedCoordinate || mainPage.outsideAllowedRegion
+                    visible: !mainPage.hasSelectedCoordinate
                     z: 1
                 }
             }
@@ -563,15 +597,22 @@ Page {
                 wrapMode: Text.WordWrap
             }
 
-            Text {
-                id: alertPopupMessage
+            ScrollView {
                 Layout.fillWidth: true
-                font.pixelSize: 16
-                wrapMode: Text.WordWrap
-                color: "#4e342e"
-            }
+                Layout.fillHeight: true
+                clip: true
 
-            Item { Layout.fillHeight: true }
+                TextArea {
+                    id: alertPopupMessage
+                    text: ""
+                    font.pixelSize: 16
+                    wrapMode: Text.WordWrap
+                    color: "#4e342e"
+                    readOnly: true
+                    background: null
+                    selectByMouse: true
+                }
+            }
 
             Button {
                 text: qsTr("Dismiss")
@@ -588,22 +629,26 @@ Page {
             monitorPopupAutoClose.stop()
             alertPopupTitle.text = alert && alert.alertType
                 ? qsTr("%1 Alert").arg(alert.alertType)
-                : qsTr("Weather Alert")
+                : (alertController.nwsAlerts && alertController.nwsAlerts.length > 0
+                    ? alertController.nwsAlerts[0].event || qsTr("Weather Alert")
+                    : qsTr("Weather Alert"))
             alertPopupLocation.text = alert
                 ? qsTr("Lat: %1°, Lon: %2°")
                     .arg(alert.latitude ? alert.latitude.toFixed(3) : "--")
                     .arg(alert.longitude ? alert.longitude.toFixed(3) : "--")
-                : ""
+                : (alertController.nwsAlerts && alertController.nwsAlerts.length > 0
+                    ? alertController.nwsAlerts[0].areas || ""
+                    : "")
             alertPopupMessage.text = message || qsTr("Alert conditions were met.")
             alertPopup.open()
         }
         function onAlertCycleStarted(activeAlerts) {
             monitorPopupTitle.text = qsTr("Alert Cycle")
-            monitorPopupMessage.text = activeAlerts > 0
-                ? qsTr("Checking %1 active alert%2 now.")
-                    .arg(activeAlerts)
-                    .arg(activeAlerts === 1 ? "" : "s")
-                : qsTr("No active alerts to check right now.")
+            monitorPopupMessage.text = mainPage.hasSelectedCoordinate
+                ? qsTr("Checking National Weather Service alerts near %1°, %2°.")
+                    .arg(mainPage.selectedCoordinate.latitude.toFixed(2))
+                    .arg(mainPage.selectedCoordinate.longitude.toFixed(2))
+                : qsTr("Select a location to begin monitoring alerts.")
             monitorPopup.open()
             monitorPopupAutoClose.restart()
         }

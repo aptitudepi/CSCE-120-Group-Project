@@ -8,18 +8,27 @@
 #include <QDateTime>
 #include <QVariantMap>
 #include <QList>
+#include <QtMath>
+#include <cmath>
 
 AlertController::AlertController(QObject *parent)
     : QObject(parent)
     , m_dbManager(DatabaseManager::instance())
-    , m_weatherService(new NWSService(this))
+    , m_nwsService(new NWSService(this))
     , m_countdownTimer(new QTimer(this))
     , m_monitoring(false)
     , m_secondsToNextCheck(0)
     , m_checkIntervalSeconds(5 * 60)
+    , m_monitorLatitude(0.0)
+    , m_monitorLongitude(0.0)
+    , m_hasMonitorLocation(false)
 {
-    connect(m_weatherService, &WeatherService::forecastReady,
+    connect(m_nwsService, &WeatherService::forecastReady,
             this, &AlertController::onForecastReady);
+    connect(m_nwsService, &NWSService::alertsReady,
+            this, &AlertController::onNwsAlertsReady);
+    connect(m_nwsService, &WeatherService::error,
+            this, &AlertController::onServiceError);
     connect(m_countdownTimer, &QTimer::timeout,
             this, &AlertController::onCountdownTick);
     
@@ -118,6 +127,25 @@ void AlertController::stopMonitoring() {
     emit monitoringChanged();
 }
 
+void AlertController::setMonitorLocation(double latitude, double longitude) {
+    if (!std::isfinite(latitude) || !std::isfinite(longitude)) {
+        qWarning() << "Ignored invalid monitor coordinates" << latitude << longitude;
+        return;
+    }
+    
+    bool changed = !m_hasMonitorLocation
+        || !qFuzzyCompare(1 + latitude, 1 + m_monitorLatitude)
+        || !qFuzzyCompare(1 + longitude, 1 + m_monitorLongitude);
+    
+    m_monitorLatitude = latitude;
+    m_monitorLongitude = longitude;
+    m_hasMonitorLocation = true;
+    
+    if (changed) {
+        fetchNwsAlerts();
+    }
+}
+
 void AlertController::checkAlerts() {
     int activeAlerts = 0;
     for (AlertModel* alert : m_alerts) {
@@ -127,6 +155,10 @@ void AlertController::checkAlerts() {
     }
     
     emit alertCycleStarted(activeAlerts);
+    
+    if (m_hasMonitorLocation) {
+        fetchNwsAlerts();
+    }
     
     if (activeAlerts == 0) {
         return;
@@ -138,7 +170,7 @@ void AlertController::checkAlerts() {
             continue;
         }
         
-        m_weatherService->fetchCurrent(alert->latitude(), alert->longitude());
+        m_nwsService->fetchCurrent(alert->latitude(), alert->longitude());
         // Store alert for callback
         // Note: This is simplified - in a real implementation, we'd track which alert
         // each request belongs to
@@ -187,6 +219,72 @@ void AlertController::onCountdownTick() {
 void AlertController::resetCountdown() {
     m_secondsToNextCheck = m_checkIntervalSeconds;
     emit secondsToNextCheckChanged();
+}
+
+void AlertController::fetchNwsAlerts() {
+    if (!m_hasMonitorLocation || !m_nwsService) {
+        return;
+    }
+    
+    m_nwsService->fetchAlerts(m_monitorLatitude, m_monitorLongitude);
+}
+
+void AlertController::onNwsAlertsReady(QList<QJsonObject> alerts) {
+    QVariantList list;
+    list.reserve(alerts.size());
+    
+    for (const QJsonObject& alert : alerts) {
+        QJsonObject props = alert["properties"].toObject();
+        QVariantMap map;
+        
+        // Handle ID safely (JSON value could be string or null)
+        QJsonValue idVal = props["id"];
+        if (idVal.isUndefined() || idVal.isNull()) {
+            idVal = alert["id"];
+        }
+        map["id"] = idVal.toString();
+        
+        map["event"] = props["event"].toString();
+        
+        // Handle headline safely
+        QString headline = props["headline"].toString();
+        if (headline.isEmpty()) {
+            headline = props["event"].toString();
+        }
+        map["headline"] = headline;
+        
+        map["description"] = props["description"].toString();
+        map["instruction"] = props["instruction"].toString();
+        map["severity"] = props["severity"].toString();
+        map["urgency"] = props["urgency"].toString();
+        map["areas"] = props["areaDesc"].toString();
+        map["effective"] = props["effective"].toString();
+        map["expires"] = props["expires"].toString();
+        list.append(map);
+    }
+    
+    m_nwsAlerts = list;
+    emit nwsAlertsChanged();
+    
+    if (!list.isEmpty()) {
+        const QVariantMap first = list.first().toMap();
+        QString event = first.value("event").toString();
+        QString headline = first.value("headline").toString();
+        if (headline.isEmpty()) {
+            headline = event;
+        }
+        
+        QString description = first.value("description").toString();
+        QString message = headline;
+        if (!description.isEmpty()) {
+            message += "\n\n" + description;
+        }
+        emit alertTriggered(nullptr, message);
+    }
+}
+
+void AlertController::onServiceError(const QString& message) {
+    qWarning() << "Alert controller service error:" << message;
 }
 
 void AlertController::loadAlertsFromDatabase() {
