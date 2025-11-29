@@ -36,6 +36,7 @@ jobs:
           libqt6sql6-sqlite \
           libsqlite3-dev \
           pkg-config \
+          qt6-positioning-dev \
           patchelf
           
     - name: Quick build check
@@ -75,6 +76,7 @@ jobs:
           qml6-module-qtquick-controls \
           qml6-module-qtquick-layouts \
           qml6-module-qtquick-window \
+          qt6-positioning-dev \
           libqt6sql6-sqlite \
           libsqlite3-dev \
           libgtest-dev \
@@ -126,6 +128,7 @@ jobs:
           qml6-module-qtquick-controls \
           qml6-module-qtquick-layouts \
           qml6-module-qtquick-window \
+          qt6-positioning-dev \
           libqt6sql6-sqlite \
           libsqlite3-dev \
           libgtest-dev \
