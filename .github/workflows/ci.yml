@@ -42,6 +42,7 @@ jobs:
           libgtest-dev \
           pkg-config \
           patchelf \
+          qt6-positioning-dev \
           lcov
           
     - name: Cache build artifacts
@@ -120,6 +121,7 @@ jobs:
           pkg-config \
           patchelf \
           lcov \
+          qt6-positioning-dev \
           gcovr
           
     - name: Build with coverage
