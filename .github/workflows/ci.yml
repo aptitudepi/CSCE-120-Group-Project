@@ -23,30 +23,37 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       
-    - name: Install Qt6 and dependencies
+    - name: Setup Qt 6
+      uses: qt-actions/setup-qt@v2
+      with:
+        version: '6.6.2'
+        host: 'linux'
+        arch: 'x64'
+
+    - name: Install remaining system dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y \
           build-essential \
           cmake \
           ninja-build \
-          qt6-base-dev \
-          qt6-declarative-dev \
-          qt6-tools-dev \
-          qt6-positioning-dev \
-          qt6-location-dev \
-          qml6-module-qtquick \
-          qml6-module-qtquick-controls \
-          qml6-module-qtquick-layouts \
-          qml6-module-qtquick-window \
-          qml6-module-qtpositioning \
-          qml6-module-qtlocation \
           libqt6sql6-sqlite \
           libsqlite3-dev \
           libgtest-dev \
           pkg-config \
           patchelf \
-          lcov
+          lcov \
+          gcovr || true
+        # compute CMAKE_PREFIX_PATH from qmake and export to environment for CMake
+        if command -v qmake >/dev/null 2>&1; then
+          QT_LIB_CMAKE_DIR="$(dirname "$(dirname "$(command -v qmake)")")/lib/cmake"
+          echo "CMAKE_PREFIX_PATH=$QT_LIB_CMAKE_DIR" >> $GITHUB_ENV
+          echo "QT_LIB_CMAKE_DIR=$QT_LIB_CMAKE_DIR" >> $GITHUB_ENV
+          qmake -v || true
+        else
+          echo "qmake not found; ensure setup-qt succeeded" >&2
+          exit 1
+        fi
           
     - name: Cache build artifacts
       uses: actions/cache@v3
@@ -65,6 +72,7 @@ jobs:
         cd build-${{ matrix.build_type }}
         cmake -G Ninja \
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DCMAKE_PREFIX_PATH="${{ env.CMAKE_PREFIX_PATH }}" \
           -DBUILD_TESTS=ON \
           ..
           
@@ -104,31 +112,37 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       
-    - name: Install Qt6 and dependencies
+    - name: Setup Qt 6
+      uses: qt-actions/setup-qt@v2
+      with:
+        version: '6.6.2'
+        host: 'linux'
+        arch: 'x64'
+
+    - name: Install remaining system dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y \
           build-essential \
           cmake \
           ninja-build \
-          qt6-base-dev \
-          qt6-declarative-dev \
-          qt6-tools-dev \
-          qt6-positioning-dev \
-          qt6-location-dev \
-          qml6-module-qtquick \
-          qml6-module-qtquick-controls \
-          qml6-module-qtquick-layouts \
-          qml6-module-qtquick-window \
-          qml6-module-qtpositioning \
-          qml6-module-qtlocation \
           libqt6sql6-sqlite \
           libsqlite3-dev \
           libgtest-dev \
           pkg-config \
           patchelf \
           lcov \
-          gcovr
+          gcovr || true
+        # compute CMAKE_PREFIX_PATH from qmake and export to environment for CMake
+        if command -v qmake >/dev/null 2>&1; then
+          QT_LIB_CMAKE_DIR="$(dirname "$(dirname "$(command -v qmake)")")/lib/cmake"
+          echo "CMAKE_PREFIX_PATH=$QT_LIB_CMAKE_DIR" >> $GITHUB_ENV
+          echo "QT_LIB_CMAKE_DIR=$QT_LIB_CMAKE_DIR" >> $GITHUB_ENV
+          qmake -v || true
+        else
+          echo "qmake not found; ensure setup-qt succeeded" >&2
+          exit 1
+        fi
           
     - name: Build with coverage
       run: |
@@ -136,6 +150,7 @@ jobs:
         cd build-coverage
         cmake -G Ninja \
           -DCMAKE_BUILD_TYPE=Debug \
+          -DCMAKE_PREFIX_PATH="${{ env.CMAKE_PREFIX_PATH }}" \
           -DBUILD_TESTS=ON \
           -DENABLE_COVERAGE=ON \
           ..
