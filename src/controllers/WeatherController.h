@@ -8,7 +8,6 @@
 #include "models/ForecastModel.h"
 #include "services/NWSService.h"
 #include "services/PirateWeatherService.h"
-#include "services/WeatherbitService.h"
 #include "services/CacheManager.h"
 #include "services/WeatherAggregator.h"
 #include "services/PerformanceMonitor.h"
@@ -36,8 +35,7 @@ public:
     enum ServiceProvider {
         NWS = 0,
         PirateWeather = 1,
-        Aggregated = 2,
-        Weatherbit = 3
+        Aggregated = 2
     };
     Q_ENUM(ServiceProvider)
     
@@ -63,7 +61,6 @@ public:
     Q_INVOKABLE void deleteLocation(int locationId);
     Q_INVOKABLE void loadLocation(int locationId);
     Q_INVOKABLE void setPirateWeatherApiKey(const QString& apiKey);
-    Q_INVOKABLE void setWeatherbitApiKey(const QString& apiKey);
     
 signals:
     void forecastModelChanged();
@@ -96,7 +93,6 @@ private:
     WeatherData* m_current;
     NWSService* m_nwsService;
     PirateWeatherService* m_pirateService;
-    WeatherbitService* m_weatherbitService;
     CacheManager* m_cache;
     WeatherAggregator* m_aggregator;
     PerformanceMonitor* m_performanceMonitor;

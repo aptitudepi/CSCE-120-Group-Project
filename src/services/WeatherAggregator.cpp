@@ -81,16 +81,13 @@ WeatherAggregator::WeatherAggregator(QObject *parent)
 
     SpatioTemporalEngine::APIWeights weights = m_spatioTemporalEngine->apiWeights();
     double nwsWeight = envDouble("HLW_API_WEIGHT_NWS", 0.5);
-    double pirateWeight = envDouble("HLW_API_WEIGHT_PIRATE", 0.3);
-    double weatherbitWeight = envDouble("HLW_API_WEIGHT_WEATHERBIT", 0.2);
-    if (nwsWeight <= 0.0 && pirateWeight <= 0.0 && weatherbitWeight <= 0.0) {
+    double pirateWeight = envDouble("HLW_API_WEIGHT_PIRATE", 0.5);
+    if (nwsWeight <= 0.0 && pirateWeight <= 0.0) {
         nwsWeight = 0.5;
-        pirateWeight = 0.3;
-        weatherbitWeight = 0.2;
+        pirateWeight = 0.5;
     }
     weights.weights["NWS"] = nwsWeight;
     weights.weights["PirateWeather"] = pirateWeight;
-    weights.weights["Weatherbit"] = weatherbitWeight;
     m_spatioTemporalEngine->setAPIWeights(weights);
 
     m_gridMatchTolerance = envDouble("HLW_GRID_TOLERANCE_DEG", m_gridMatchTolerance);

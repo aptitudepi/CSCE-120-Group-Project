@@ -23,7 +23,6 @@ WeatherController::WeatherController(QObject *parent)
     , m_current(nullptr)
     , m_nwsService(new NWSService(this))
     , m_pirateService(new PirateWeatherService(this))
-    , m_weatherbitService(new WeatherbitService(this))
     , m_cache(new CacheManager(50, this))
     , m_aggregator(new WeatherAggregator(this))
     , m_performanceMonitor(new PerformanceMonitor(this))
@@ -45,19 +44,11 @@ WeatherController::WeatherController(QObject *parent)
         qWarning() << "PIRATE_WEATHER_API_KEY is not set. Pirate Weather requests will fail.";
     }
 
-    QString weatherbitKey = qEnvironmentVariable("WEATHERBIT_API_KEY");
-    if (!weatherbitKey.isEmpty()) {
-        m_weatherbitService->setApiKey(weatherbitKey);
-    } else if (!m_weatherbitService->hasApiKey()) {
-        qWarning() << "WEATHERBIT_API_KEY is not set. Weatherbit requests will be skipped.";
-    }
-    
     // Initialize historical data manager
     m_historicalManager->initialize();
     
     // Setup aggregator with services
     // m_aggregator->addService(m_nwsService, 10); // Higher priority for NWS
-    // m_aggregator->addService(m_weatherbitService, 7);
     m_aggregator->addService(m_pirateService, 5);
     m_aggregator->setStrategy(WeatherAggregator::WeightedAverage); // Use weighted average strategy
     m_aggregator->setMovingAverageEnabled(true); // Enable moving average smoothing
@@ -79,14 +70,6 @@ WeatherController::WeatherController(QObject *parent)
     connect(m_pirateService, &PirateWeatherService::error,
             this, &WeatherController::onServiceError);
 
-    // Connect Weatherbit service
-    connect(m_weatherbitService, &WeatherbitService::forecastReady,
-            this, &WeatherController::onForecastReady);
-    connect(m_weatherbitService, &WeatherbitService::currentReady,
-            this, &WeatherController::onCurrentReady);
-    connect(m_weatherbitService, &WeatherbitService::error,
-            this, &WeatherController::onServiceError);
-    
     // Connect aggregator
     connect(m_aggregator, &WeatherAggregator::forecastReady,
             this, &WeatherController::onAggregatorForecastReady);
@@ -120,8 +103,6 @@ QString WeatherController::serviceProvider() const {
             return "PirateWeather";
         case Aggregated:
             return "Aggregated";
-        case Weatherbit:
-            return "Weatherbit";
         default:
             return "NWS";
     }
@@ -204,10 +185,6 @@ void WeatherController::fetchForecast(double latitude, double longitude) {
                 setLoading(false);
             }
             break;
-        case Weatherbit:
-            // Weatherbit disabled
-            qWarning() << "Weatherbit service is disabled. Please use PirateWeather.";
-            break;
         case Aggregated:
             if (m_useAggregation) {
                 qDebug() << "Cache miss - fetching from aggregated services";
@@ -237,9 +214,6 @@ void WeatherController::refreshForecast() {
         }
         if (m_nwsService) {
             m_nwsService->cancelActiveRequests();
-        }
-        if (m_weatherbitService) {
-            m_weatherbitService->cancelActiveRequests();
         }
         
         fetchForecast(m_lastLat, m_lastLon);
@@ -401,8 +375,6 @@ void WeatherController::fetchNowcast(double latitude, double longitude) {
             m_aggregator->fetchForecast(latitude, longitude);
         } else if (m_serviceProvider == PirateWeather && m_pirateService->isAvailable()) {
             m_pirateService->fetchCurrent(latitude, longitude);
-        } else if (m_serviceProvider == Weatherbit && m_weatherbitService->isAvailable()) {
-            m_weatherbitService->fetchCurrent(latitude, longitude);
         } else {
             m_nwsService->fetchCurrent(latitude, longitude);
         }
@@ -543,9 +515,6 @@ bool WeatherController::shouldProcessServiceResponse(QObject* source, bool& call
         return m_serviceProvider == PirateWeather;
     }
 
-    if (source == m_weatherbitService) {
-        return m_serviceProvider == Weatherbit;
-    }
 
     return false;
 }
@@ -602,19 +571,7 @@ void WeatherController::setPirateWeatherApiKey(const QString& apiKey) {
         qInfo() << "Pirate Weather API key updated";
         
         // Enable aggregation if we now have API keys
-        if (m_pirateService->hasApiKey() || m_weatherbitService->hasApiKey()) {
-            setUseAggregation(true);
-        }
-    }
-}
-
-void WeatherController::setWeatherbitApiKey(const QString& apiKey) {
-    if (m_weatherbitService) {
-        m_weatherbitService->setApiKey(apiKey);
-        qInfo() << "Weatherbit API key updated";
-        
-        // Enable aggregation if we now have API keys
-        if (m_pirateService->hasApiKey() || m_weatherbitService->hasApiKey()) {
+        if (m_pirateService->hasApiKey()) {
             setUseAggregation(true);
         }
     }

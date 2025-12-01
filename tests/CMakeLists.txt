@@ -124,7 +124,6 @@ target_sources(HyperlocalWeatherTests PRIVATE
     ${CMAKE_SOURCE_DIR}/src/services/WeatherService.cpp
     ${CMAKE_SOURCE_DIR}/src/services/NWSService.cpp
     ${CMAKE_SOURCE_DIR}/src/services/PirateWeatherService.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/WeatherbitService.cpp
     ${CMAKE_SOURCE_DIR}/src/services/CacheManager.cpp
     ${CMAKE_SOURCE_DIR}/src/services/WeatherAggregator.cpp
     ${CMAKE_SOURCE_DIR}/src/services/PerformanceMonitor.cpp

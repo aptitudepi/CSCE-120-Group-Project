@@ -211,21 +211,11 @@ Page {
                         echoMode: TextInput.Password
                     }
                     
-                    TextField {
-                        id: weatherbitApiKey
-                        Layout.fillWidth: true
-                        placeholderText: qsTr("Weatherbit API Key")
-                        echoMode: TextInput.Password
-                    }
-                    
                     Button {
                         text: qsTr("Save API Keys")
                         onClicked: {
                             if (pirateApiKey.text.length > 0) {
                                 weatherController.setPirateWeatherApiKey(pirateApiKey.text)
-                            }
-                            if (weatherbitApiKey.text.length > 0) {
-                                weatherController.setWeatherbitApiKey(weatherbitApiKey.text)
                             }
                             saveConfirmation.visible = true
                             saveConfirmationTimer.restart()

@@ -27,7 +27,7 @@ TEST_F(NWSServiceTest, IsAvailable) {
 }
 
 // Integration test - requires network
-TEST_F(NWSServiceTest, DISABLED_FetchGridpoint) {
+TEST_F(NWSServiceTest, FetchGridpoint) {
     QEventLoop loop;
     bool received = false;
     

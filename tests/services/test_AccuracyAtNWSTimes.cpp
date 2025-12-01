@@ -158,6 +158,11 @@ TEST_F(AccuracyAtNWSTimesTest, CompareAtNextNwsUpdateTime) {
     double timeDiff = qAbs(nwsMatch->timestamp().secsTo(targetTime));
     double timeDiffPirate = qAbs(pirateMatch->timestamp().secsTo(targetTime));
     
+    // Calculate percentage difference relative to NWS temperature
+    double nwsTemp = nwsMatch->temperature();
+    double percentDiff = (nwsTemp != 0.0) ? (tempDiff / qAbs(nwsTemp)) * 100.0 : 0.0;
+    const double THRESHOLD_PERCENT = 30.0; // 30% threshold
+    
     // Accuracy report
     qInfo() << "\n=========================================";
     qInfo() << "ACCURACY REPORT AT NWS UPDATE TIME";
@@ -166,9 +171,11 @@ TEST_F(AccuracyAtNWSTimesTest, CompareAtNextNwsUpdateTime) {
             << "(diff: " << (timeDiff / 3600.0) << " hours)";
     qInfo() << "Pirate forecast time:" << pirateMatch->timestamp().toString()
             << "(diff: " << (timeDiffPirate / 3600.0) << " hours)";
-    qInfo() << "NWS Temperature:" << nwsMatch->temperature() << "F";
+    qInfo() << "NWS Temperature:" << nwsTemp << "F";
     qInfo() << "Pirate Temperature:" << pirateMatch->temperature() << "F";
     qInfo() << "Temperature Difference:" << tempDiff << "F";
+    qInfo() << "Percentage Difference:" << QString::number(percentDiff, 'f', 2) << "%";
+    qInfo() << "Threshold:" << THRESHOLD_PERCENT << "%";
     qInfo() << "=========================================\n";
     
     // Calculate accuracy metrics
@@ -178,8 +185,12 @@ TEST_F(AccuracyAtNWSTimesTest, CompareAtNextNwsUpdateTime) {
     qInfo() << "Temperature Accuracy:" << QString::number(tempAccuracy, 'f', 2) << "%";
     qInfo() << "(Accuracy calculated as 100% if diff < 5°F, decreasing linearly)";
     
-    // Test passes if temperature difference is reasonable
-    EXPECT_LT(tempDiff, 15.0) << "Temperature difference too large (>15°F)";
+    // Test passes if temperature difference is within 30% threshold
+    EXPECT_LE(percentDiff, THRESHOLD_PERCENT) 
+        << "Temperature difference exceeds 30% threshold. "
+        << "Difference: " << percentDiff << "%, NWS: " << nwsTemp << "F, "
+        << "Pirate: " << pirateMatch->temperature() << "F, "
+        << "Absolute diff: " << tempDiff << "F";
     
     // Clean up
     qDeleteAll(nwsData);
@@ -258,24 +269,47 @@ TEST_F(AccuracyAtNWSTimesTest, CompareAtBoth6amAnd6pm) {
     WeatherData* nws6pm = findClosestToTime(nwsData, target6pm);
     WeatherData* pirate6pm = findClosestToTime(pirateData, target6pm);
     
+    const double THRESHOLD_PERCENT = 30.0; // 30% threshold
+    
     qInfo() << "\n=========================================";
     qInfo() << "ACCURACY REPORT: 6AM AND 6PM COMPARISON";
+    qInfo() << "Threshold: " << THRESHOLD_PERCENT << "%";
     qInfo() << "=========================================\n";
     
     if (nws6am && pirate6am) {
         double diff6am = qAbs(nws6am->temperature() - pirate6am->temperature());
+        double nwsTemp6am = nws6am->temperature();
+        double percentDiff6am = (nwsTemp6am != 0.0) ? (diff6am / qAbs(nwsTemp6am)) * 100.0 : 0.0;
+        
         qInfo() << "6AM Comparison:";
-        qInfo() << "  NWS:" << nws6am->temperature() << "F at" << nws6am->timestamp().toString();
+        qInfo() << "  NWS:" << nwsTemp6am << "F at" << nws6am->timestamp().toString();
         qInfo() << "  Pirate:" << pirate6am->temperature() << "F at" << pirate6am->timestamp().toString();
-        qInfo() << "  Difference:" << diff6am << "F";
+        qInfo() << "  Absolute Difference:" << diff6am << "F";
+        qInfo() << "  Percentage Difference:" << QString::number(percentDiff6am, 'f', 2) << "%";
+        
+        // Assert that difference is within 30% threshold
+        EXPECT_LE(percentDiff6am, THRESHOLD_PERCENT)
+            << "6AM: Temperature difference exceeds 30% threshold. "
+            << "Difference: " << percentDiff6am << "%, NWS: " << nwsTemp6am << "F, "
+            << "Pirate: " << pirate6am->temperature() << "F";
     }
     
     if (nws6pm && pirate6pm) {
         double diff6pm = qAbs(nws6pm->temperature() - pirate6pm->temperature());
+        double nwsTemp6pm = nws6pm->temperature();
+        double percentDiff6pm = (nwsTemp6pm != 0.0) ? (diff6pm / qAbs(nwsTemp6pm)) * 100.0 : 0.0;
+        
         qInfo() << "6PM Comparison:";
-        qInfo() << "  NWS:" << nws6pm->temperature() << "F at" << nws6pm->timestamp().toString();
+        qInfo() << "  NWS:" << nwsTemp6pm << "F at" << nws6pm->timestamp().toString();
         qInfo() << "  Pirate:" << pirate6pm->temperature() << "F at" << pirate6pm->timestamp().toString();
-        qInfo() << "  Difference:" << diff6pm << "F";
+        qInfo() << "  Absolute Difference:" << diff6pm << "F";
+        qInfo() << "  Percentage Difference:" << QString::number(percentDiff6pm, 'f', 2) << "%";
+        
+        // Assert that difference is within 30% threshold
+        EXPECT_LE(percentDiff6pm, THRESHOLD_PERCENT)
+            << "6PM: Temperature difference exceeds 30% threshold. "
+            << "Difference: " << percentDiff6pm << "%, NWS: " << nwsTemp6pm << "F, "
+            << "Pirate: " << pirate6pm->temperature() << "F";
     }
     
     qInfo() << "=========================================\n";

@@ -36,7 +36,7 @@ TEST_F(EndToEndTest, WeatherControllerCreation) {
 }
 
 // Integration test - requires network
-TEST_F(EndToEndTest, DISABLED_FetchForecast) {
+TEST_F(EndToEndTest, FetchForecast) {
     WeatherController controller;
     QEventLoop loop;
     bool forecastReceived = false;

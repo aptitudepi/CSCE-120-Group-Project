@@ -45,7 +45,6 @@ set(SOURCES
     src/services/WeatherService.cpp
     src/services/NWSService.cpp
     src/services/PirateWeatherService.cpp
-    src/services/WeatherbitService.cpp
     src/services/CacheManager.cpp
     src/services/WeatherAggregator.cpp
     src/services/PerformanceMonitor.cpp
@@ -68,7 +67,6 @@ set(HEADERS
     src/services/WeatherService.h
     src/services/NWSService.h
     src/services/PirateWeatherService.h
-    src/services/WeatherbitService.h
     src/services/CacheManager.h
     src/services/WeatherAggregator.h
     src/services/PerformanceMonitor.h
