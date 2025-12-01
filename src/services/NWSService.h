@@ -37,6 +37,8 @@ public:
      */
     void fetchGridpoint(double latitude, double longitude);
     
+    void cancelActiveRequests() override;
+    
 signals:
     void alertsReady(QList<QJsonObject> alerts);
     void gridpointReady(QString office, int x, int y);
@@ -70,6 +72,9 @@ private:
     QNetworkAccessManager* m_networkManager;
     QMap<QString, Gridpoint> m_gridpointCache;
     QMap<QString, QDateTime> m_lastModifiedCache;
+    QSet<QNetworkReply*> m_activeReplies;
+    
+    void unregisterReply(QNetworkReply* reply);
     
     static const QString BASE_URL;
 };

@@ -14,8 +14,8 @@ WeatherAggregator::WeatherAggregator(QObject *parent)
     , m_timeoutTimer(new QTimer(this))
     , m_movingAverageFilter(new MovingAverageFilter(this))
     , m_movingAverageEnabled(false)
-    , m_defaultTimeoutMs(15000)
-    , m_spatioTimeoutMs(30000)
+    , m_defaultTimeoutMs(30000)
+    , m_spatioTimeoutMs(60000)
     , m_totalRequests(0)
     , m_successfulRequests(0)
     , m_failedRequests(0)
@@ -452,6 +452,22 @@ void WeatherAggregator::onServiceError(QString message) {
 
 void WeatherAggregator::onTimeout() {
     if (m_spatioTemporalActive) {
+        qWarning() << "Spatio-temporal request timed out. Status:";
+        for (auto it = m_spatioContexts.constBegin(); it != m_spatioContexts.constEnd(); ++it) {
+            int completed = 0;
+            for (const SpatioGridPointState& state : it.value().gridStates) {
+                if (state.completed) completed++;
+            }
+            qWarning() << "  Service" << it.value().apiName << ":" 
+                       << completed << "/" << it.value().gridStates.size() << "completed,"
+                       << "hasTemporalResult:" << it.value().hasTemporalResult
+                       << "hasError:" << it.value().hasError;
+        }
+        
+        // Attempt to salvage partial results
+        finalizeSpatioTemporalResult();
+        if (!m_spatioTemporalActive) return; // Successfully finalized
+        
         m_failedRequests++;
         emit error("Request timeout");
         resetSpatioTemporalState();
@@ -1091,7 +1107,12 @@ void WeatherAggregator::finalizeSpatioTemporalResult() {
     }
 
     if (waitingForService) {
-        return;
+        // If we are here due to timeout, force completion of whatever we have
+        if (!m_timeoutTimer->isActive()) {
+            qDebug() << "Forcing finalization of spatio-temporal result due to timeout";
+        } else {
+            return;
+        }
     }
 
     QMap<QString, QList<WeatherData*>> apiForecasts;
@@ -1126,6 +1147,10 @@ void WeatherAggregator::finalizeSpatioTemporalResult() {
 
 void WeatherAggregator::resetSpatioTemporalState(bool deleteTimelines) {
     for (auto it = m_spatioContexts.begin(); it != m_spatioContexts.end(); ++it) {
+        // Cancel any pending network requests for this service to prevent
+        // responses from matching against a future (different) grid.
+        it.key()->cancelActiveRequests();
+        
         for (SpatioGridPointState& state : it.value().gridStates) {
             qDeleteAll(state.forecasts);
             state.forecasts.clear();

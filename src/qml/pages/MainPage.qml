@@ -16,6 +16,16 @@ Page {
         var ss = secs < 10 ? "0" + secs : secs
         return mm + ":" + ss
     }
+    
+    function formatExpirationCountdown(seconds) {
+        if (seconds < 0) return ""
+        if (seconds < 60) return qsTr("%1s").arg(seconds)
+        if (seconds < 3600) return qsTr("%1m").arg(Math.floor(seconds / 60))
+        var hours = Math.floor(seconds / 3600)
+        var minutes = Math.floor((seconds % 3600) / 60)
+        if (minutes === 0) return qsTr("%1h").arg(hours)
+        return qsTr("%1h %2m").arg(hours).arg(minutes)
+    }
 
     readonly property var defaultCoordinate: QtPositioning.coordinate(30.6272, -96.3344)
     property var selectedCoordinate: defaultCoordinate
@@ -200,11 +210,21 @@ Page {
                     Layout.fillWidth: true
                     text: alertController.monitoring
                           ? (alertMonitorCard.hasAlerts
-                             ? qsTr("Next automatic check in %1 seconds").arg(Math.max(alertController.secondsToNextCheck, 0))
-                             : qsTr("Add an alert to begin monitoring."))
+                             ? qsTr("Next check in %1").arg(formatCountdown(Math.max(alertController.secondsToNextCheck, 0)))
+                             : qsTr("No alerts. Monitoring active."))
                           : qsTr("Alert monitoring paused")
                     font.pixelSize: 11
                     color: "#8a6d3b"
+                    wrapMode: Text.WordWrap
+                }
+                
+                Text {
+                    Layout.fillWidth: true
+                    visible: alertMonitorCard.hasAlerts && alertController.secondsToAlertExpiration > 0
+                    text: qsTr("Alert expires in: %1").arg(formatExpirationCountdown(alertController.secondsToAlertExpiration))
+                    font.pixelSize: 12
+                    font.bold: true
+                    color: "#d32f2f"
                     wrapMode: Text.WordWrap
                 }
 
@@ -625,32 +645,50 @@ Page {
     Connections {
         target: alertController
         function onAlertTriggered(alert, message) {
-            monitorPopup.close()
-            monitorPopupAutoClose.stop()
-            alertPopupTitle.text = alert && alert.alertType
-                ? qsTr("%1 Alert").arg(alert.alertType)
-                : (alertController.nwsAlerts && alertController.nwsAlerts.length > 0
-                    ? alertController.nwsAlerts[0].event || qsTr("Weather Alert")
-                    : qsTr("Weather Alert"))
-            alertPopupLocation.text = alert
-                ? qsTr("Lat: %1°, Lon: %2°")
-                    .arg(alert.latitude ? alert.latitude.toFixed(3) : "--")
-                    .arg(alert.longitude ? alert.longitude.toFixed(3) : "--")
-                : (alertController.nwsAlerts && alertController.nwsAlerts.length > 0
-                    ? alertController.nwsAlerts[0].areas || ""
-                    : "")
-            alertPopupMessage.text = message || qsTr("Alert conditions were met.")
-            alertPopup.open()
+            // Only show popup when there's an actual NWS alert (not just cycle updates)
+            // alert === null means it's an NWS alert, otherwise it's a threshold-based alert
+            if (alert === null && alertMonitorCard.hasAlerts) {
+                // This is an NWS alert - show popup
+                monitorPopup.close()
+                monitorPopupAutoClose.stop()
+                if (alertController.nwsAlerts && alertController.nwsAlerts.length > 0) {
+                    var firstAlert = alertController.nwsAlerts[0]
+                    alertPopupTitle.text = (firstAlert.event || qsTr("Weather Alert")).toString()
+                    alertPopupLocation.text = (firstAlert.areas || "").toString()
+                    alertPopupMessage.text = message || qsTr("NWS alert conditions detected.")
+                    alertPopup.open()
+                }
+            } else if (alert !== null) {
+                // Threshold-based alert
+                alertPopupTitle.text = alert.alertType
+                    ? qsTr("%1 Alert").arg(alert.alertType)
+                    : qsTr("Weather Alert")
+                alertPopupLocation.text = alert
+                    ? qsTr("Lat: %1°, Lon: %2°")
+                        .arg(alert.latitude ? alert.latitude.toFixed(3) : "--")
+                        .arg(alert.longitude ? alert.longitude.toFixed(3) : "--")
+                    : ""
+                alertPopupMessage.text = message || qsTr("Alert conditions were met.")
+                alertPopup.open()
+            }
         }
         function onAlertCycleStarted(activeAlerts) {
-            monitorPopupTitle.text = qsTr("Alert Cycle")
-            monitorPopupMessage.text = mainPage.hasSelectedCoordinate
-                ? qsTr("Checking National Weather Service alerts near %1°, %2°.")
-                    .arg(mainPage.selectedCoordinate.latitude.toFixed(2))
-                    .arg(mainPage.selectedCoordinate.longitude.toFixed(2))
-                : qsTr("Select a location to begin monitoring alerts.")
-            monitorPopup.open()
-            monitorPopupAutoClose.restart()
+            // Don't show popup for cycle start - only show when actual alerts are triggered
+            // Cycle updates happen silently in the background
+        }
+    }
+    
+    Timer {
+        id: expirationCountdownTimer
+        interval: 1000
+        running: alertMonitorCard.hasAlerts && alertController.monitoring
+        repeat: true
+        onTriggered: {
+            // Force UI update for expiration countdown
+            if (alertController.secondsToAlertExpiration <= 0 && alertMonitorCard.hasAlerts) {
+                // Alert expired, refresh alerts
+                alertController.checkAlerts()
+            }
         }
     }
 }

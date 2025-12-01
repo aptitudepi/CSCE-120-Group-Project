@@ -46,7 +46,7 @@ public:
      * completes (e.g., rapid GPS updates). Ensures we don't process stale
      * replies that can lead to inconsistent state.
      */
-    void cancelActiveRequests();
+    void cancelActiveRequests() override;
     
 signals:
     void minuteForecastReady(QList<WeatherData*> data);

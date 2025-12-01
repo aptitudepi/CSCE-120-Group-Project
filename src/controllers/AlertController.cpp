@@ -22,6 +22,8 @@ AlertController::AlertController(QObject *parent)
     , m_monitorLatitude(0.0)
     , m_monitorLongitude(0.0)
     , m_hasMonitorLocation(false)
+    , m_earliestAlertExpiration()
+    , m_hadAlertsPreviously(false)
 {
     connect(m_nwsService, &WeatherService::forecastReady,
             this, &AlertController::onForecastReady);
@@ -142,6 +144,8 @@ void AlertController::setMonitorLocation(double latitude, double longitude) {
     m_hasMonitorLocation = true;
     
     if (changed) {
+        // Reset alert state when location changes (alerts at new location are considered "new")
+        m_hadAlertsPreviously = false;
         fetchNwsAlerts();
     }
 }
@@ -200,6 +204,16 @@ void AlertController::onForecastReady(QList<WeatherData*> data) {
     // For now, assume they're managed elsewhere
 }
 
+int AlertController::secondsToAlertExpiration() const {
+    if (!m_earliestAlertExpiration.isValid()) {
+        return -1;
+    }
+    
+    QDateTime now = QDateTime::currentDateTime();
+    qint64 seconds = now.secsTo(m_earliestAlertExpiration);
+    return (seconds > 0) ? static_cast<int>(seconds) : 0;
+}
+
 void AlertController::onCountdownTick() {
     if (!m_monitoring) {
         return;
@@ -209,6 +223,9 @@ void AlertController::onCountdownTick() {
         m_secondsToNextCheck--;
         emit secondsToNextCheckChanged();
     }
+    
+    // Update alert expiration countdown
+    emit secondsToAlertExpirationChanged();
     
     if (m_secondsToNextCheck <= 0) {
         checkAlerts();
@@ -232,6 +249,9 @@ void AlertController::fetchNwsAlerts() {
 void AlertController::onNwsAlertsReady(QList<QJsonObject> alerts) {
     QVariantList list;
     list.reserve(alerts.size());
+    
+    QDateTime earliestExpiration;
+    bool hasExpiration = false;
     
     for (const QJsonObject& alert : alerts) {
         QJsonObject props = alert["properties"].toObject();
@@ -259,14 +279,45 @@ void AlertController::onNwsAlertsReady(QList<QJsonObject> alerts) {
         map["urgency"] = props["urgency"].toString();
         map["areas"] = props["areaDesc"].toString();
         map["effective"] = props["effective"].toString();
-        map["expires"] = props["expires"].toString();
+        
+        // Parse expiration time
+        QString expiresStr = props["expires"].toString();
+        map["expires"] = expiresStr;
+        
+        if (!expiresStr.isEmpty()) {
+            QDateTime expires = QDateTime::fromString(expiresStr, Qt::ISODate);
+            if (expires.isValid()) {
+                map["expiresTimestamp"] = expires.toMSecsSinceEpoch();
+                if (!hasExpiration || expires < earliestExpiration) {
+                    earliestExpiration = expires;
+                    hasExpiration = true;
+                }
+            }
+        }
+        
         list.append(map);
     }
+    
+    // Update earliest expiration
+    if (hasExpiration) {
+        m_earliestAlertExpiration = earliestExpiration;
+    } else {
+        m_earliestAlertExpiration = QDateTime();
+    }
+    emit earliestAlertExpirationChanged();
+    
+    // Only emit alert triggered if there are NEW alerts (transition from no alerts to having alerts)
+    bool hasAlertsNow = !list.isEmpty();
+    bool isNewAlert = hasAlertsNow && !m_hadAlertsPreviously;
     
     m_nwsAlerts = list;
     emit nwsAlertsChanged();
     
-    if (!list.isEmpty()) {
+    // Update the previous state
+    m_hadAlertsPreviously = hasAlertsNow;
+    
+    // Only emit alert triggered for new alerts (when alerts first appear)
+    if (isNewAlert) {
         const QVariantMap first = list.first().toMap();
         QString event = first.value("event").toString();
         QString headline = first.value("headline").toString();

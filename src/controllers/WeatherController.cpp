@@ -56,8 +56,8 @@ WeatherController::WeatherController(QObject *parent)
     m_historicalManager->initialize();
     
     // Setup aggregator with services
-    m_aggregator->addService(m_nwsService, 10); // Higher priority for NWS
-    m_aggregator->addService(m_weatherbitService, 7);
+    // m_aggregator->addService(m_nwsService, 10); // Higher priority for NWS
+    // m_aggregator->addService(m_weatherbitService, 7);
     m_aggregator->addService(m_pirateService, 5);
     m_aggregator->setStrategy(WeatherAggregator::WeightedAverage); // Use weighted average strategy
     m_aggregator->setMovingAverageEnabled(true); // Enable moving average smoothing
@@ -99,13 +99,12 @@ WeatherController::WeatherController(QObject *parent)
     connect(m_performanceMonitor, &PerformanceMonitor::metricsUpdated,
             this, &WeatherController::performanceMonitorChanged);
 
-    // Default to aggregated mode only if API keys are available
-    if (m_pirateService->hasApiKey() || m_weatherbitService->hasApiKey()) {
-        setUseAggregation(true);
-    } else {
-        qInfo() << "No third-party API keys found. Defaulting to NWS only.";
-        setUseAggregation(false);
-        setServiceProvider(NWS);
+    // Default to Pirate Weather (disable aggregation and NWS fallback)
+    setUseAggregation(false);
+    setServiceProvider(PirateWeather);
+    
+    if (!m_pirateService->hasApiKey()) {
+        qWarning() << "PIRATE_WEATHER_API_KEY is not set. Pirate Weather requests will fail.";
     }
 }
 
@@ -192,8 +191,8 @@ void WeatherController::fetchForecast(double latitude, double longitude) {
     
     switch (m_serviceProvider) {
         case NWS:
-            qDebug() << "Cache miss - fetching from NWS API";
-            m_nwsService->fetchForecast(latitude, longitude);
+            // NWS disabled
+            qWarning() << "NWS service is disabled. Please use PirateWeather.";
             break;
         case PirateWeather:
             if (m_pirateService->isAvailable()) {
@@ -206,21 +205,21 @@ void WeatherController::fetchForecast(double latitude, double longitude) {
             }
             break;
         case Weatherbit:
-            if (m_weatherbitService->isAvailable()) {
-                qDebug() << "Cache miss - fetching from Weatherbit API";
-                m_weatherbitService->fetchForecast(latitude, longitude);
-            } else {
-                setErrorMessage("Weatherbit API key not available");
-                setLoading(false);
-            }
+            // Weatherbit disabled
+            qWarning() << "Weatherbit service is disabled. Please use PirateWeather.";
             break;
         case Aggregated:
             if (m_useAggregation) {
                 qDebug() << "Cache miss - fetching from aggregated services";
                 m_aggregator->fetchForecast(latitude, longitude);
             } else {
-                // Fallback to NWS if aggregation disabled
-                m_nwsService->fetchForecast(latitude, longitude);
+                // Fallback to PirateWeather if aggregation disabled
+                 if (m_pirateService->isAvailable()) {
+                    m_pirateService->fetchForecast(latitude, longitude);
+                } else {
+                    setErrorMessage("Pirate Weather API key not available");
+                    setLoading(false);
+                }
             }
             break;
     }
@@ -232,6 +231,17 @@ void WeatherController::refreshForecast() {
         QString cacheKey = generateCacheKey(m_lastLat, m_lastLon);
         m_cache->remove(cacheKey);
         
+        // Cancel any active requests to avoid processing stale responses
+        if (m_pirateService) {
+            m_pirateService->cancelActiveRequests();
+        }
+        if (m_nwsService) {
+            m_nwsService->cancelActiveRequests();
+        }
+        if (m_weatherbitService) {
+            m_weatherbitService->cancelActiveRequests();
+        }
+        
         fetchForecast(m_lastLat, m_lastLon);
     }
 }
@@ -242,7 +252,11 @@ void WeatherController::clearError() {
 
 void WeatherController::onForecastReady(QList<WeatherData*> data) {
     bool callerOwnsData = true;
-    if (!shouldProcessServiceResponse(sender(), callerOwnsData)) {
+    bool isFromCache = (sender() == nullptr);
+    
+    // If data comes from cache (no sender), always process it
+    // Otherwise, check if it's from the active service
+    if (!isFromCache && !shouldProcessServiceResponse(sender(), callerOwnsData)) {
         qDebug() << "Ignoring forecast from inactive source";
         if (callerOwnsData) {
             qDeleteAll(data);
@@ -319,12 +333,12 @@ void WeatherController::onAggregatorError(QString error) {
     qWarning() << "Aggregator error:" << error << "- Falling back to NWS";
     m_performanceMonitor->recordServiceDown("Aggregated");
 
-    // Fallback to NWS only if we were using aggregation
+    // Fallback to PirateWeather only if we were using aggregation
     if (m_useAggregation) {
         setUseAggregation(false);
-        setServiceProvider(NWS);
+        setServiceProvider(PirateWeather);
         
-        // Retry with NWS
+        // Retry with PirateWeather
         if (m_lastLat != 0.0 || m_lastLon != 0.0) {
             fetchForecast(m_lastLat, m_lastLon);
         }

@@ -43,6 +43,14 @@ public:
      */
     virtual bool isAvailable() const { return true; }
     
+    /**
+     * @brief Cancel any in-flight network requests.
+     * 
+     * Used when the caller issues a new fetch before the previous request
+     * completes.
+     */
+    virtual void cancelActiveRequests() {}
+    
 signals:
     /**
      * @brief Emitted when forecast data is ready

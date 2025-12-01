@@ -23,6 +23,8 @@ class AlertController : public QObject
     Q_PROPERTY(int secondsToNextCheck READ secondsToNextCheck NOTIFY secondsToNextCheckChanged)
     Q_PROPERTY(int checkIntervalSeconds READ checkIntervalSeconds CONSTANT)
     Q_PROPERTY(QVariantList nwsAlerts READ nwsAlerts NOTIFY nwsAlertsChanged)
+    Q_PROPERTY(QDateTime earliestAlertExpiration READ earliestAlertExpiration NOTIFY earliestAlertExpirationChanged)
+    Q_PROPERTY(int secondsToAlertExpiration READ secondsToAlertExpiration NOTIFY secondsToAlertExpirationChanged)
     
 public:
     explicit AlertController(QObject *parent = nullptr);
@@ -33,6 +35,8 @@ public:
     int secondsToNextCheck() const { return m_secondsToNextCheck; }
     int checkIntervalSeconds() const { return m_checkIntervalSeconds; }
     QVariantList nwsAlerts() const { return m_nwsAlerts; }
+    QDateTime earliestAlertExpiration() const { return m_earliestAlertExpiration; }
+    int secondsToAlertExpiration() const;
     
     Q_INVOKABLE void addAlert(double latitude, double longitude, 
                               const QString& alertType, double threshold);
@@ -48,6 +52,8 @@ signals:
     void monitoringChanged();
     void secondsToNextCheckChanged();
     void nwsAlertsChanged();
+    void earliestAlertExpirationChanged();
+    void secondsToAlertExpirationChanged();
     void alertTriggered(AlertModel* alert, const QString& message);
     void alertCycleStarted(int activeAlerts);
     
@@ -76,7 +82,9 @@ private:
     double m_monitorLongitude;
     bool m_hasMonitorLocation;
     QVariantList m_nwsAlerts;
+    QDateTime m_earliestAlertExpiration;
     QMap<int, QDateTime> m_lastTriggered; // Alert ID -> Last triggered time
+    bool m_hadAlertsPreviously; // Track if we had alerts in the previous fetch
 };
 
 #endif // ALERTCONTROLLER_H

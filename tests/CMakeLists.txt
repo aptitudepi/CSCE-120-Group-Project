@@ -49,12 +49,14 @@ set(TEST_SOURCES
     test_main.cpp
     models/test_WeatherData.cpp
     services/test_CacheManager.cpp
-    services/test_NWSService.cpp
-    services/test_PirateWeatherService.cpp
-    services/test_WeatherAggregator.cpp
-    services/test_PerformanceMonitor.cpp
     services/test_MovingAverageFilter.cpp
+    services/test_NWSService.cpp
+    services/test_PerformanceMonitor.cpp
+    services/test_PirateWeatherService.cpp
     services/test_SpatioTemporalEngine.cpp
+    services/test_WeatherAggregator.cpp
+    services/test_PirateVsNWS.cpp
+    services/test_AccuracyAtNWSTimes.cpp
     integration/test_EndToEnd.cpp
 )
 

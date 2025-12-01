@@ -16,18 +16,40 @@ NWSService::NWSService(QObject *parent)
     : WeatherService(parent)
     , m_networkManager(new QNetworkAccessManager(this))
 {
-    connect(m_networkManager, &QNetworkAccessManager::finished,
-            this, [this](QNetworkReply* reply) {
-        if (reply->error() != QNetworkReply::NoError) {
-            qWarning() << "Network error:" << reply->errorString();
-            emit error(reply->errorString());
-            reply->deleteLater();
-            return;
-        }
-    });
+{
+}
 }
 
-NWSService::~NWSService() = default;
+NWSService::~NWSService() {
+    cancelActiveRequests();
+}
+
+void NWSService::cancelActiveRequests() {
+    if (m_activeReplies.isEmpty()) {
+        return;
+    }
+    
+    const auto replies = m_activeReplies;
+    for (QNetworkReply* reply : replies) {
+        if (!reply) {
+            continue;
+        }
+        reply->disconnect(this);
+        reply->abort();
+        reply->deleteLater();
+    }
+    m_activeReplies.clear();
+}
+
+void NWSService::unregisterReply(QNetworkReply* reply) {
+    if (!reply) {
+        return;
+    }
+    if (m_activeReplies.contains(reply)) {
+        reply->disconnect(this);
+        m_activeReplies.remove(reply);
+    }
+}
 
 void NWSService::fetchForecast(double latitude, double longitude) {
     QString cacheKey = QString("%1_%2").arg(latitude, 0, 'f', 4).arg(longitude, 0, 'f', 4);
@@ -62,6 +84,7 @@ void NWSService::fetchForecast(double latitude, double longitude) {
     }
     
     QNetworkReply* reply = m_networkManager->get(request);
+    m_activeReplies.insert(reply);
     connect(reply, &QNetworkReply::finished, this, &NWSService::onForecastReplyFinished);
     reply->setProperty("latitude", latitude);
     reply->setProperty("longitude", longitude);
@@ -81,6 +104,7 @@ void NWSService::fetchGridpoint(double latitude, double longitude) {
     request.setRawHeader("Accept", "application/json");
     
     QNetworkReply* reply = m_networkManager->get(request);
+    m_activeReplies.insert(reply);
     connect(reply, &QNetworkReply::finished, this, &NWSService::onPointsReplyFinished);
     reply->setProperty("latitude", latitude);
     reply->setProperty("longitude", longitude);
@@ -95,6 +119,7 @@ void NWSService::fetchAlerts(double latitude, double longitude) {
     request.setRawHeader("Accept", "application/json");
     
     QNetworkReply* reply = m_networkManager->get(request);
+    m_activeReplies.insert(reply);
     connect(reply, &QNetworkReply::finished, this, &NWSService::onAlertsReplyFinished);
 }
 
@@ -103,6 +128,8 @@ void NWSService::onPointsReplyFinished() {
     if (!reply) {
         return;
     }
+    
+    unregisterReply(reply);
     
     double lat = reply->property("latitude").toDouble();
     double lon = reply->property("longitude").toDouble();
@@ -128,6 +155,8 @@ void NWSService::onForecastReplyFinished() {
     if (!reply) {
         return;
     }
+    
+    unregisterReply(reply);
     
     if (reply->error() != QNetworkReply::NoError) {
         if (reply->error() == QNetworkReply::ContentNotFoundError) {
@@ -172,6 +201,8 @@ void NWSService::onHourlyReplyFinished() {
         return;
     }
     
+    unregisterReply(reply);
+    
     if (reply->error() != QNetworkReply::NoError) {
         qWarning() << "Hourly forecast error:" << reply->errorString();
         emit error(reply->errorString());
@@ -193,6 +224,8 @@ void NWSService::onAlertsReplyFinished() {
         return;
     }
     
+    unregisterReply(reply);
+    
     if (reply->error() != QNetworkReply::NoError) {
         qWarning() << "Alerts request error:" << reply->errorString();
         emit error(reply->errorString());
@@ -210,6 +243,7 @@ void NWSService::onNetworkError(QNetworkReply::NetworkError networkError) {
     Q_UNUSED(networkError)
     QNetworkReply* reply = qobject_cast<QNetworkReply*>(sender());
     if (reply) {
+        unregisterReply(reply);
         emit error(reply->errorString());
     }
 }

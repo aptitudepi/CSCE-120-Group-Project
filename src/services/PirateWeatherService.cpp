@@ -20,10 +20,8 @@ PirateWeatherService::PirateWeatherService(QObject *parent)
     , m_networkManager(new QNetworkAccessManager(this))
 {
     // Try to get API key from environment
-    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-    if (env.contains("PIRATE_WEATHER_API_KEY")) {
-        m_apiKey = env.value("PIRATE_WEATHER_API_KEY");
-    }
+    // Try to get API key from environment, fallback to hardcoded key for testing
+    m_apiKey = qEnvironmentVariable("PWAPI", "6fyepOdzDm02NMczwko9y6FlHmJXQAmG");
 }
 
 PirateWeatherService::~PirateWeatherService() {
@@ -46,6 +44,8 @@ void PirateWeatherService::fetchForecast(double latitude, double longitude) {
     
     QString url = QString("%1/%2/%3,%4")
         .arg(BASE_URL, m_apiKey, QString::number(latitude, 'f', 4), QString::number(longitude, 'f', 4));
+        
+    qDebug() << "PirateWeather requesting URL:" << url;
     
     QNetworkRequest request{QUrl(url)};
     request.setHeader(QNetworkRequest::UserAgentHeader, "HyperlocalWeather/1.0");
@@ -85,6 +85,12 @@ void PirateWeatherService::onForecastReplyFinished() {
     unregisterReply(reply);
     
     if (reply->error() != QNetworkReply::NoError) {
+        // Emit error signal so WeatherController can reset loading state
+        QString errorMsg = reply->errorString();
+        if (errorMsg.isEmpty()) {
+            errorMsg = QString("Network error: %1").arg(reply->error());
+        }
+        emit error(errorMsg);
         reply->deleteLater();
         return;
     }
@@ -97,10 +103,9 @@ void PirateWeatherService::onForecastReplyFinished() {
     // Check receivers in main thread
     const bool hasMinuteReceivers = receivers(SIGNAL(minuteForecastReady(QList<WeatherData*>))) > 0;
     
-    // Offload parsing to background thread
-    (void)QtConcurrent::run([this, data, lat, lon, hasMinuteReceivers]() {
-        parseForecastResponse(data, lat, lon, hasMinuteReceivers);
-    });
+    // Parse on main thread to avoid threading issues with QObjects
+    // JSON parsing is fast enough to do synchronously
+    parseForecastResponse(data, lat, lon, hasMinuteReceivers);
     
     reply->deleteLater();
 }
@@ -141,8 +146,6 @@ void PirateWeatherService::parseForecastResponse(const QByteArray& data, double 
     }
     
     // Parse minutely forecast for nowcasting
-    // const bool hasMinuteReceivers = receivers(SIGNAL(minuteForecastReady(QList<WeatherData*>))) > 0; // Moved to main thread
-    
     if (hasMinuteReceivers && obj.contains("minutely") && obj["minutely"].isObject()) {
         QJsonObject minutely = obj["minutely"].toObject();
         if (minutely.contains("data") && minutely["data"].isArray()) {
@@ -161,6 +164,9 @@ void PirateWeatherService::parseForecastResponse(const QByteArray& data, double 
     
     if (!forecasts.isEmpty()) {
         emit forecastReady(forecasts);
+    } else {
+        // No forecast data available - emit error so controller can reset loading state
+        emit error("No forecast data available in response");
     }
 }
 
