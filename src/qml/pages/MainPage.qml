@@ -92,41 +92,6 @@ Page {
             }
         }
 
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.preferredHeight: infoLayout.implicitHeight + 24
-            Layout.bottomMargin: 10
-            color: "#e3f2fd"
-            radius: 6
-            border.color: "#bbdefb"
-            border.width: 1
-
-            ColumnLayout {
-                id: infoLayout
-                anchors.top: parent.top
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.margins: 12
-                spacing: 10
-
-                Text {
-                    text: qsTr("Interpolated Forecast")
-                    font.pixelSize: 18
-                    font.bold: true
-                    color: "#0d47a1"
-                }
-
-                Text {
-                    Layout.fillWidth: true
-                    text: qsTr("Combines NWS and Pirate Weather data using a 1 km spatial grid (center + 6 offsets) "
-                               + "and one-minute temporal interpolation between now and each provider's next forecast.")
-                    wrapMode: Text.WordWrap
-                    font.pixelSize: 13
-                    color: "#0d47a1"
-                }
-            }
-        }
-
         // Alert monitoring status
         Rectangle {
             id: alertMonitorCard
@@ -584,9 +549,10 @@ Page {
     Popup {
         id: alertPopup
         x: (parent.width - width) / 2
-        y: (parent.height - height) / 2
-        width: Math.min(mainPage.width * 0.6, 420)
-        height: 230
+        y: Math.max(20, (parent.height - height) / 2)
+        width: Math.min(mainPage.width * 0.8, 500)
+        implicitHeight: alertPopupLayout.implicitHeight + 40
+        height: Math.min(implicitHeight, mainPage.height * 0.8)
         modal: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
         background: Rectangle {
@@ -597,16 +563,19 @@ Page {
         }
 
         ColumnLayout {
+            id: alertPopupLayout
             anchors.fill: parent
             anchors.margins: 20
             spacing: 14
 
             Text {
                 id: alertPopupTitle
+                Layout.fillWidth: true
                 text: qsTr("Weather Alert")
                 font.pixelSize: 22
                 font.bold: true
                 color: "#e65100"
+                wrapMode: Text.WordWrap
             }
 
             Text {
@@ -620,7 +589,12 @@ Page {
             ScrollView {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                Layout.minimumHeight: 100
                 clip: true
+                ScrollBar.vertical: ScrollBar {
+                    policy: ScrollBar.AsNeeded
+                    active: true
+                }
 
                 TextArea {
                     id: alertPopupMessage
@@ -631,12 +605,14 @@ Page {
                     readOnly: true
                     background: null
                     selectByMouse: true
+                    padding: 5
                 }
             }
 
             Button {
                 text: qsTr("Dismiss")
                 Layout.alignment: Qt.AlignRight
+                Layout.preferredWidth: 100
                 onClicked: alertPopup.close()
             }
         }
@@ -691,5 +667,6 @@ Page {
             }
         }
     }
+
 }
 
