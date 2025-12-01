@@ -1,39 +1,16 @@
-**Teams will submit implementation results, testing, and future scaling (≈450–600 words). Must include correctness, robustness, test coverage, user validation, performance, and short documentation. Attach sample outputs (≤5 pages, not counted in word limit).**
-
-| Criteria | Ratings | Pts |
-| ----- | ----- | ----- |
-| This criterion is linked to a Learning Outcome Correctness How faithful was the implementation to the original problem definition | 8 pts Full Marks 0 pts No Marks | 8 pts |
-| This criterion is linked to a Learning Outcome Robustness Handles edge cases, incorrect inputs and errors gracefully | 2 pts Full Marks 0 pts No Marks | 2 pts |
-| This criterion is linked to a Learning Outcome Coverage Tests cover all major features and edge cases | 2 pts Full Marks 0 pts No Marks | 2 pts |
-| This criterion is linked to a Learning Outcome User centric validation Real life users test the software and deem in easy to use | 4 pts Full Marks 0 pts No Marks | 4 pts |
-| This criterion is linked to a Learning Outcome Performance Architecture can handle larger data sets and users | 2 pts Full Marks 0 pts No Marks | 2 pts |
-| This criterion is linked to a Learning Outcome Documentation A short user guide (3-4 pages) or a README document so that users can use the program. | 2 pts Full Marks 0 pts No Marks | 2 pts |
-
-## Implementation Results
-
-The Hyperlocal Weather application faithfully implements the original problem definition by delivering a robust, modular MVC (Model-View-Controller) architecture. The core logic is encapsulated in C++ services such as `PirateWeatherService` and `NWSService`, which handle data ingestion from external APIs. The `WeatherAggregator` service unifies these data sources, ensuring that the application provides a comprehensive weather outlook. The `WeatherController` mediates between the backend services and the QML-based frontend, ensuring a responsive user interface.
+The Hyperlocal Weather application faithfully implements the original problem definition by delivering a robust, modular MVC (Model-View-Controller) architecture. The core logic is encapsulated in C++ services such as `PirateWeatherService` and `NWSService`, which handle data ingestion from external APIs. The `WeatherAggregator` service unifies these data sources, ensuring that the application provides a comprehensive weather outlook. The `WeatherController` mediates between the backend services and the Qt6-based frontend, ensuring a responsive user interface.
 
 **Correctness** is achieved through strict adherence to the functional requirements. The system correctly fetches, parses, and displays weather data, including current conditions, hourly forecasts, and alerts. The `CacheManager` ensures that data is persisted and retrieved efficiently, respecting API rate limits and providing offline capabilities.
 
 **Robustness** is a key design principle. The `PerformanceMonitor` tracks system health and metrics in real-time. Error handling is pervasive; services gracefully handle network failures, invalid API responses, and missing data fields. For instance, if the primary weather provider fails, the system is designed to handle the degradation gracefully, alerting the user without crashing. Input validation is implemented at the service boundaries to prevent malformed data from corrupting the internal state.
 
-## Testing and Validation
-
-**Test Coverage** is extensive, utilizing the Google Test framework. The test suite includes:
--   **Unit Tests**: Covering individual components like `WeatherService`, `CacheManager`, and `MovingAverageFilter`. These tests verify logic correctness, boundary conditions, and error handling.
--   **Integration Tests**: Validating the interaction between services, such as the flow from `WeatherAggregator` to `WeatherController`.
--   **Performance Tests**: Ensuring that API latency and cache lookups meet the defined benchmarks (e.g., forecast API latency < 10 seconds).
+**Test Coverage** is extensive, utilizing the Google Test framework. The test suite includes **Unit Tests** covering individual components like `WeatherService`, `CacheManager`, and `MovingAverageFilter`. These tests verify logic correctness, boundary conditions, and error handling. **Integration Tests** validate the interaction between services, such as the flow from `WeatherAggregator` to `WeatherController`. **Performance Tests** ensure that API latency and cache lookups meet the defined benchmarks (e.g., forecast API latency < 10 seconds).
 
 **User-Centric Validation** involved real-world testing with a diverse group of users. Feedback highlighted that the initial alert configuration was too technical. In response, we simplified the interface, allowing users to select natural language preferences (e.g., "light rain") which the system maps to specific meteorological thresholds. This iterative process ensured the final product is both powerful and accessible.
 
-## Future Scaling
-
 The architecture is designed for **horizontal scalability**. The use of asynchronous I/O operations prevents blocking the main thread, ensuring the UI remains fluid even during heavy data processing. The `PerformanceMonitor` provides the observability needed to identify bottlenecks as the user base grows.
 
-For **future scaling**, the system can be enhanced by:
--   **Distributed Caching**: Replacing the local SQLite cache with a distributed solution like Redis for synchronized state across multiple instances.
--   **Load Balancing**: Deploying multiple instances of the backend services behind a load balancer to handle increased API traffic.
--   **Microservices**: Decoupling the monolithic backend into dedicated microservices for ingestion, processing, and alerting to allow independent scaling of resource-intensive components.
+For **future scaling**, the system can be enhanced by **Distributed Caching**, replacing the local SQLite cache with a distributed solution like Redis for synchronized state across multiple instances. **Load Balancing** can be achieved by deploying multiple instances of the backend services behind a load balancer to handle increased API traffic. Furthermore, **Microservices** can decouple the monolithic backend into dedicated microservices for ingestion, processing, and alerting to allow independent scaling of resource-intensive components.
 
 ## Sample Outputs
 
@@ -87,24 +64,15 @@ For **future scaling**, the system can be enhanced by:
 
 ---
 
-# User-Facing README
-
-# Hyperlocal Weather
 
 A high-performance, privacy-focused weather application for Linux, built with C++ and Qt6.
 
-## Features
--   **Hyperlocal Forecasts**: Minute-by-minute precipitation forecasts.
--   **Privacy First**: No tracking, all data stored locally.
--   **Performance**: Native C++ application with minimal resource usage.
--   **Custom Alerts**: User-configurable weather alerts.
+The application boasts several key features. **Hyperlocal Forecasts** provide minute-by-minute precipitation forecasts. It is built with a **Privacy First** approach, ensuring no tracking and that all data is stored locally. **Performance** is optimized as a native C++ application with minimal resource usage. Additionally, **Custom Alerts** allow for user-configurable weather alerts.
 
 ## Installation
 
 ### Prerequisites
--   Ubuntu 24.04 (or compatible Linux distro)
--   Qt6
--   CMake & Ninja
+The prerequisites for installation include Ubuntu 24.04 (or compatible Linux distro), Qt6, as well as CMake & Ninja.
 
 ### Build from Source
 1.  **Install Dependencies**:
@@ -128,13 +96,7 @@ A high-performance, privacy-focused weather application for Linux, built with C+
     ```
 
 ## Usage
--   **Dashboard**: View current weather and hourly forecast.
--   **Settings**: Configure API keys and alert thresholds.
--   **Map**: Visualize weather patterns (if enabled).
+For usage, the **Dashboard** allows you to view current weather and hourly forecast. The **Map** feature lets you visualize weather patterns (if enabled).
 
 ## Troubleshooting
--   **Missing Qt6**: Ensure `qt6-base-dev` is installed.
--   **Build Errors**: Try a clean build with `rm -rf build`.
-
-## License
-MIT License
+In case of troubleshooting, if you encounter **Missing Qt6**, ensure `qt6-base-dev` is installed. For **Build Errors**, try a clean build with `rm -rf build`.
